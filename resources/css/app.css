@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@theme {
+    --color-primary: #0067FF;
+    --color-yellow: #FEB60D;
+    --color-purple: #9771FF;
+    --color-iris: #01B5C5;
+    --color-heading: #181A1E;
+    --color-text: #4E545F;
+}
+
+@keyframes testimonial-scroll {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+.testimonial-slider {
+    width: max-content;
+    animation: testimonial-scroll 25s linear infinite;
+}
+
+.testimonial-slider:hover {
+    animation-play-state: paused;
+}
