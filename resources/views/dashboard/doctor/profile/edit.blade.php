@@ -2,7 +2,7 @@
 
 @php
     $doctor = $doctor ?? auth()->user();
-    $inputClass = 'h-12 w-full rounded-xl border border-[#c9dcff] bg-[#f7faff] px-4 text-base text-[#181A1E] placeholder:text-[#4E545F] focus:border-[#0067FF] focus:outline-none focus:ring-2 focus:ring-[#0067FF]/20';
+    $inputClass = 'h-12 w-full rounded-xl border border-[#E2EAF4] bg-[#F4F7FB] px-4 text-base text-[#0B1F3A] placeholder:text-[#53647D] focus:border-[#1769FF] focus:outline-none focus:ring-2 focus:ring-[#1769FF]/20';
 
     $name = old('name', data_get($doctor, 'name', ''));
     $email = data_get($doctor, 'email', '');
@@ -48,12 +48,19 @@
 @endphp
 
 @section('content')
-    <div class="rounded-2xl bg-[#0067FF] p-6 text-white shadow-[0_12px_40px_rgba(0,103,255,0.22)] sm:p-8">
+    <div class="dash-banner">
         <p class="text-sm font-semibold uppercase tracking-wide text-white/80">Doctor profile</p>
         <h1 class="mt-2 text-3xl font-extrabold leading-tight">Edit your details</h1>
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/85">
+        <p class="mt-3 max-w-2xl text-sm leading-6 text-white/80">
             Update the information patients see before they book: your specialty, fee, background, and open hours.
         </p>
+        <div class="mt-6 flex flex-wrap gap-2">
+            <span class="dash-chip">Profile settings</span>
+            @if ($specialization !== '')
+                <span class="dash-chip">{{ $specialization }}</span>
+            @endif
+            <span class="dash-chip">{{ $isPending ? 'Awaiting approval' : 'Visible after you save' }}</span>
+        </div>
     </div>
 
     @if (session('status'))
@@ -70,17 +77,17 @@
         @csrf
         @method('PUT')
 
-        <section class="rounded-2xl border border-[#0066ff1f] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-            <h2 class="text-xl font-bold text-[#181A1E]">Personal information</h2>
-            <p class="mt-1 text-sm leading-6 text-[#4E545F]">Email stays as the login address and cannot be changed here.</p>
+        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
+            <h2 class="text-xl font-bold text-[#0B1F3A]">Personal information</h2>
+            <p class="mt-1 text-sm leading-6 text-[#53647D]">Email stays as the login address and cannot be changed here.</p>
 
             <div class="mt-6 flex flex-wrap items-center gap-4">
-                <figure data-photo-preview class="{{ $photoUrl ? 'flex' : 'hidden' }} h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-[#0067FF]">
+                <figure data-photo-preview class="{{ $photoUrl ? 'flex' : 'hidden' }} h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-[#1769FF]">
                     <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-full w-full object-cover">
                 </figure>
                 <div class="relative h-12 w-[140px]">
                     <input type="file" name="photo" id="doctor-photo" accept="image/*" class="absolute inset-0 cursor-pointer opacity-0">
-                    <label for="doctor-photo" class="flex h-full w-full cursor-pointer items-center justify-center rounded-xl bg-[#0066ff46] text-sm font-semibold text-[#181A1E]">
+                    <label for="doctor-photo" class="flex h-full w-full cursor-pointer items-center justify-center rounded-xl bg-[#1769FF46] text-sm font-semibold text-[#0B1F3A]">
                         Upload photo
                     </label>
                 </div>
@@ -94,25 +101,25 @@
 
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label for="name" class="mb-2 block text-sm font-semibold text-[#181A1E]">Full name</label>
+                    <label for="name" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Full name</label>
                     <input id="name" type="text" name="name" value="{{ $name }}" required class="{{ $inputClass }}">
                     @error('name')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
                 <div>
-                    <label for="email" class="mb-2 block text-sm font-semibold text-[#181A1E]">Email</label>
-                    <input id="email" type="email" value="{{ $email }}" readonly class="{{ $inputClass }} cursor-not-allowed bg-[#eef3fb] text-[#4E545F]">
+                    <label for="email" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Email</label>
+                    <input id="email" type="email" value="{{ $email }}" readonly class="{{ $inputClass }} cursor-not-allowed bg-[#eef3fb] text-[#53647D]">
                 </div>
                 <div>
-                    <label for="phone" class="mb-2 block text-sm font-semibold text-[#181A1E]">Phone</label>
+                    <label for="phone" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Phone</label>
                     <input id="phone" type="number" name="phone" value="{{ $phone }}" placeholder="Phone number" class="{{ $inputClass }}">
                     @error('phone')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
                 <div>
-                    <label for="gender" class="mb-2 block text-sm font-semibold text-[#181A1E]">Gender</label>
+                    <label for="gender" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Gender</label>
                     <select id="gender" name="gender" class="{{ $inputClass }}">
                         <option value="">Select</option>
                         @foreach ($genders as $value => $label)
@@ -124,7 +131,7 @@
                     @enderror
                 </div>
                 <div>
-                    <label for="specialization" class="mb-2 block text-sm font-semibold text-[#181A1E]">Specialization</label>
+                    <label for="specialization" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Specialization</label>
                     <select id="specialization" name="specialization" class="{{ $inputClass }}">
                         <option value="">Select</option>
                         @foreach ($specializations as $option)
@@ -136,14 +143,14 @@
                     @enderror
                 </div>
                 <div>
-                    <label for="ticketPrice" class="mb-2 block text-sm font-semibold text-[#181A1E]">Ticket price</label>
+                    <label for="ticketPrice" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Ticket price</label>
                     <input id="ticketPrice" type="number" min="0" name="ticketPrice" value="{{ $ticketPrice }}" placeholder="1500" class="{{ $inputClass }}">
                     @error('ticketPrice')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
                 <div>
-                    <label for="bio" class="mb-2 block text-sm font-semibold text-[#181A1E]">Short bio</label>
+                    <label for="bio" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Short bio</label>
                     <input id="bio" type="text" name="bio" value="{{ $bio }}" placeholder="One line about your practice" class="{{ $inputClass }}">
                     @error('bio')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
@@ -152,21 +159,21 @@
             </div>
 
             <div class="mt-5">
-                <label for="about" class="mb-2 block text-sm font-semibold text-[#181A1E]">About</label>
-                <textarea id="about" name="about" rows="5" placeholder="Write about your care, procedures, and follow-up." class="w-full resize-y rounded-xl border border-[#c9dcff] bg-[#f7faff] px-4 py-3 text-base leading-7 text-[#181A1E] placeholder:text-[#4E545F] focus:border-[#0067FF] focus:outline-none focus:ring-2 focus:ring-[#0067FF]/20">{{ $about }}</textarea>
+                <label for="about" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">About</label>
+                <textarea id="about" name="about" rows="5" placeholder="Write about your care, procedures, and follow-up." class="w-full resize-y rounded-xl border border-[#E2EAF4] bg-[#F4F7FB] px-4 py-3 text-base leading-7 text-[#0B1F3A] placeholder:text-[#53647D] focus:border-[#1769FF] focus:outline-none focus:ring-2 focus:ring-[#1769FF]/20">{{ $about }}</textarea>
                 @error('about')
                     <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                 @enderror
             </div>
         </section>
 
-        <section class="rounded-2xl border border-[#0066ff1f] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
+        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 class="text-xl font-bold text-[#181A1E]">Qualifications</h2>
-                    <p class="mt-1 text-sm leading-6 text-[#4E545F]">Degrees and the colleges where you earned them.</p>
+                    <h2 class="text-xl font-bold text-[#0B1F3A]">Qualifications</h2>
+                    <p class="mt-1 text-sm leading-6 text-[#53647D]">Degrees and the colleges where you earned them.</p>
                 </div>
-                <button type="button" data-add="qualifications" class="inline-flex h-11 items-center rounded-xl bg-[#181A1E] px-4 text-sm font-semibold text-white hover:bg-[#2a2d33]">
+                <button type="button" data-add="qualifications" class="inline-flex h-11 items-center rounded-xl bg-[#0B1F3A] px-4 text-sm font-semibold text-white hover:bg-[#2a2d33]">
                     Add qualification
                 </button>
             </div>
@@ -180,13 +187,13 @@
             </template>
         </section>
 
-        <section class="rounded-2xl border border-[#0066ff1f] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
+        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 class="text-xl font-bold text-[#181A1E]">Experience</h2>
-                    <p class="mt-1 text-sm leading-6 text-[#4E545F]">Roles and hospitals patients should know about.</p>
+                    <h2 class="text-xl font-bold text-[#0B1F3A]">Experience</h2>
+                    <p class="mt-1 text-sm leading-6 text-[#53647D]">Roles and hospitals patients should know about.</p>
                 </div>
-                <button type="button" data-add="experiences" class="inline-flex h-11 items-center rounded-xl bg-[#181A1E] px-4 text-sm font-semibold text-white hover:bg-[#2a2d33]">
+                <button type="button" data-add="experiences" class="inline-flex h-11 items-center rounded-xl bg-[#0B1F3A] px-4 text-sm font-semibold text-white hover:bg-[#2a2d33]">
                     Add experience
                 </button>
             </div>
@@ -200,13 +207,13 @@
             </template>
         </section>
 
-        <section class="rounded-2xl border border-[#0066ff1f] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
+        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 class="text-xl font-bold text-[#181A1E]">Time slots</h2>
-                    <p class="mt-1 text-sm leading-6 text-[#4E545F]">Days and hours when patients can book you.</p>
+                    <h2 class="text-xl font-bold text-[#0B1F3A]">Time slots</h2>
+                    <p class="mt-1 text-sm leading-6 text-[#53647D]">Days and hours when patients can book you.</p>
                 </div>
-                <button type="button" data-add="timeSlots" class="inline-flex h-11 items-center rounded-xl bg-[#181A1E] px-4 text-sm font-semibold text-white hover:bg-[#2a2d33]">
+                <button type="button" data-add="timeSlots" class="inline-flex h-11 items-center rounded-xl bg-[#0B1F3A] px-4 text-sm font-semibold text-white hover:bg-[#2a2d33]">
                     Add time slot
                 </button>
             </div>
@@ -221,10 +228,10 @@
         </section>
 
         <div class="flex flex-wrap items-center justify-end gap-3">
-            <a href="{{ $showUrl }}" class="inline-flex h-12 items-center justify-center rounded-xl border border-[#c9dcff] bg-white px-6 text-base font-semibold text-[#181A1E] hover:bg-[#f7faff]">
+            <a href="{{ $showUrl }}" class="inline-flex h-12 items-center justify-center rounded-xl border border-[#E2EAF4] bg-white px-6 text-base font-semibold text-[#0B1F3A] hover:bg-[#F4F7FB]">
                 View profile
             </a>
-            <button type="submit" class="inline-flex h-12 items-center justify-center rounded-xl bg-[#0067FF] px-8 text-base font-semibold text-white hover:bg-[#0056d6]">
+            <button type="submit" class="inline-flex h-12 items-center justify-center rounded-xl bg-[#1769FF] px-8 text-base font-semibold text-white hover:bg-[#0D57E5]">
                 Save profile
             </button>
         </div>

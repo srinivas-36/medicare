@@ -8,12 +8,26 @@ use Illuminate\Http\Request;
 
 class DoctorController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $doctors = Doctor::with('user')
+        $doctors = Doctor::with(['user', 'qualifications', 'timeSlots'])
             ->where('approval_status', 'approved')
+            ->whereHas('user', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->when($request->filled('query'), function ($query) use ($request) {
+                $term = '%'.$request->string('query')->trim().'%';
+
+                $query->where(function ($query) use ($term) {
+                    $query->where('specialization', 'like', $term)
+                        ->orWhereHas('user', function ($query) use ($term) {
+                            $query->where('name', 'like', $term);
+                        });
+                });
+            })
             ->latest()
-            ->paginate(9);
+            ->paginate(9)
+            ->withQueryString();
 
         return view('public.doctors.index', compact('doctors'));
     }

@@ -1,23 +1,29 @@
 @props(['doctor'])
 
 <div>
-    <div class="mb-[50px]">
-        <h4 class="mb-[30px] text-[20px] font-bold leading-[30px] text-[#181A1E]">
-            All reviews ({{ data_get($doctor, 'totalRating', 0) }})
-        </h4>
+    @if ((int) data_get($doctor, 'totalRating', 0) > 0)
+        <div class="mb-[50px]">
+            <h4 class="mb-[30px] text-[20px] font-bold leading-[30px] text-[#0B1F3A]">
+                All reviews ({{ data_get($doctor, 'totalRating', 0) }})
+            </h4>
 
-        @foreach (data_get($doctor, 'reviews') ?? [] as $review)
-        <x-doctors.review-item :review="$review" />
-        @endforeach
-    </div>
+            @foreach (data_get($doctor, 'reviews') ?? [] as $review)
+                <x-doctors.review-item :review="$review" />
+            @endforeach
+        </div>
+    @endif
 
-    <div class="text-center" data-feedback-toggle>
-        <button type="button" class="mt-[30px] rounded-[50px] bg-[#0067FF] px-[35px] py-[15px] font-semibold text-white">
-            Give Feedback
-        </button>
-    </div>
+    @if (\Illuminate\Support\Facades\Route::has('doctors.reviews.store'))
+        <div class="text-center" data-feedback-toggle>
+            <button type="button" class="btn-primary mt-6">
+                Give Feedback
+            </button>
+        </div>
 
-    <x-doctors.feedback-form :doctor="$doctor" />
+        <x-doctors.feedback-form :doctor="$doctor" />
+    @else
+        <p class="text-sm leading-6 text-text">Public reviews are not collected on this site yet.</p>
+    @endif
 </div>
 
 @once

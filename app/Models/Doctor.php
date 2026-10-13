@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Doctor extends Model
 {
@@ -17,17 +20,82 @@ class Doctor extends Model
         'total_rating',
     ];
 
-    public function user()
+    protected function casts(): array
+    {
+        return [
+            'ticket_price' => 'decimal:2',
+            'average_rating' => 'decimal:2',
+        ];
+    }
+
+    public function getAttribute($key)
+    {
+        if ($key === 'ticketPrice') {
+            return number_format((float) ($this->attributes['ticket_price'] ?? 0), 2, '.', '');
+        }
+
+        if ($key === 'isApproved') {
+            return $this->attributes['approval_status'] ?? null;
+        }
+
+        if ($key === 'averageRating') {
+            return $this->attributes['average_rating'] ?? 0;
+        }
+
+        if ($key === 'totalRating') {
+            return $this->attributes['total_rating'] ?? 0;
+        }
+
+        if (in_array($key, ['name', 'email', 'phone', 'photo', 'gender'], true)) {
+            return $this->user?->{$key};
+        }
+
+        return parent::getAttribute($key);
+    }
+
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function experiences()
+    public function experiences(): HasMany
     {
         return $this->hasMany(DoctorExperience::class);
     }
-    public function qualifications()
+
+    public function qualifications(): HasMany
     {
         return $this->hasMany(DoctorQualification::class);
+    }
+
+    public function timeSlots(): HasMany
+    {
+        return $this->hasMany(TimeSlot::class);
+    }
+
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
+    public function registeredPatients(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'doctor_patients', 'doctor_id', 'patient_id')
+            ->withTimestamps();
+    }
+
+    public function consultations(): HasMany
+    {
+        return $this->hasMany(Consultation::class);
+    }
+
+    public function referralsSent(): HasMany
+    {
+        return $this->hasMany(Referral::class, 'from_doctor_id');
+    }
+
+    public function referralsReceived(): HasMany
+    {
+        return $this->hasMany(Referral::class, 'to_doctor_id');
     }
 }

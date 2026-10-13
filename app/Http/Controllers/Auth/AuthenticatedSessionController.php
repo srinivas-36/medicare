@@ -28,6 +28,23 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        $draft = $request->session()->get('booking_draft');
+        $hasDraft = is_array($draft) && ! empty($draft['doctor_id']);
+
+        if ($hasDraft && $request->user()->role === 'patient') {
+            $input = is_array($draft['input'] ?? null) ? $draft['input'] : [];
+
+            return redirect()
+                ->route('doctors.book', $draft['doctor_id'])
+                ->withInput($input)
+                ->with('status', 'You are signed in. Your date, time, and notes are filled in again. Attach any reports once more before confirming.');
+        }
+
+        if ($hasDraft) {
+            $request->session()->forget('booking_draft');
+            $request->session()->forget('url.intended');
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

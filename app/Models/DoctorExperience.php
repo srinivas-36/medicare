@@ -16,6 +16,15 @@ class DoctorExperience extends Model
         'is_current',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'is_current' => 'boolean',
+        ];
+    }
+
     public function doctor()
     {
         return $this->belongsTo(Doctor::class);

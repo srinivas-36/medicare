@@ -1,4 +1,4 @@
 <div>
-    <p class="text-sm text-[#4E545F]">{{ $label }}</p>
-    <p class="mt-1 font-semibold text-[#181A1E]">{{ ($value === null || $value === '') ? 'Not provided' : $value }}</p>
+    <p class="text-sm text-[#53647D]">{{ $label }}</p>
+    <p class="mt-1 font-semibold text-[#0B1F3A]">{{ ($value === null || $value === '') ? 'Not provided' : $value }}</p>
 </div>

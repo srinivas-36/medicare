@@ -1,92 +1,67 @@
-<!-- <section class="-mt-[10px] bg-gradient-to-b from-[#e7f6fb] to-white pb-10 pt-[66px] md:pb-16 md:pt-[90px]">
-    <div class="mx-auto w-full max-w-[1440px] px-5 text-center">
-        <h1 class="text-4xl font-extrabold leading-[1.1] tracking-tight text-[#181A1E] md:text-6xl">
-            Find the right doctor.
-        </h1>
-        <p class="mt-4 text-xl font-semibold text-[#181A1E] md:text-[26px]">
-            Book in minutes. Get smarter care.
-        </p>
-        <p class="mx-auto mt-3 max-w-2xl text-base leading-7 text-[#4E545F] md:text-lg">
-            AI-assisted booking &amp; referrals for faster, transparent healthcare.
-        </p>
+{{--
+    Homepage hero. The search form uses the existing doctors.index ?query= filter.
+    Location is not a supported filter, so it is not shown.
+--}}
+<section class="bg-light">
+    <div class="page grid items-center gap-12 py-12 lg:grid-cols-2 lg:py-16">
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Care that fits your life</p>
+            <h1 class="mt-3 text-4xl font-extrabold leading-[1.12] tracking-tight text-navy sm:text-5xl lg:text-[56px]">
+                Your Health<br>In Trusted Hands
+            </h1>
+            <p class="mt-4 max-w-xl text-base leading-7 text-body sm:text-[17px]">
+                Find the right doctor, book appointments in minutes, and get the care you need.
+            </p>
 
-        <form action="{{ route('doctors.index') }}" method="GET" class="mx-auto mt-10 flex w-full max-w-4xl flex-col gap-3 rounded-2xl border border-[#0066ff1f] bg-white p-3 shadow-[0_12px_40px_rgba(0,103,255,0.10)] md:flex-row md:items-center">
-            <label class="block w-full md:min-w-0 md:flex-1">
-                <span class="sr-only">Search by symptom or specialty</span>
-                <input
-                    type="text"
-                    name="query"
-                    placeholder="Search by symptom / specialty"
-                    class="h-12 w-full rounded-xl border border-[#c9dcff] bg-[#f7faff] px-4 text-base text-[#181A1E] placeholder:text-[#4E545F] focus:border-[#0067FF] focus:outline-none focus:ring-2 focus:ring-[#0067FF]/20"
-                >
-            </label>
-            <label class="block w-full md:w-56 md:shrink-0">
-                <span class="sr-only">City or locality</span>
-                <input
-                    type="text"
-                    name="city"
-                    placeholder="City / locality"
-                    class="h-12 w-full rounded-xl border border-[#c9dcff] bg-[#f7faff] px-4 text-base text-[#181A1E] placeholder:text-[#4E545F] focus:border-[#0067FF] focus:outline-none focus:ring-2 focus:ring-[#0067FF]/20"
-                >
-            </label>
-            <button type="submit" class="inline-flex h-12 w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-[#0067FF] px-7 text-base font-semibold text-white transition hover:bg-[#0056d6] md:w-auto">
-                Search Doctors
-            </button>
-        </form>
+            <form action="{{ route('doctors.index') }}" method="GET" class="mt-8 rounded-[20px] border border-line bg-white p-3 shadow-card sm:flex sm:items-center sm:gap-3">
+                <label class="relative block min-w-0 flex-1">
+                    <span class="sr-only">Search by doctor name or specialty</span>
+                    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted">
+                        <x-ui.icon name="search" />
+                    </span>
+                    <input
+                        type="search"
+                        name="query"
+                        value="{{ request('query') }}"
+                        placeholder="Search by doctor name or specialty"
+                        class="field pl-11"
+                    >
+                </label>
+                <button type="submit" class="btn-primary mt-3 w-full sm:mt-0 sm:w-auto">Find a Doctor</button>
+            </form>
 
-        <div class="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm">
-            <span class="text-[#4E545F]">Popular:</span>
-            @foreach (['Surgeon', 'Neurologist', 'Dermatologist'] as $specialty)
-                <a href="{{ route('doctors.index', ['query' => $specialty]) }}" class="rounded-full bg-white px-3.5 py-1.5 font-medium text-[#0067FF] ring-1 ring-[#0067FF]/20 transition hover:bg-[#0067FF] hover:text-white">
-                    {{ $specialty }}
-                </a>
-            @endforeach
+            <ul class="mt-5 grid grid-cols-1 gap-3 text-sm font-medium text-navy sm:grid-cols-2">
+                <li class="flex items-center gap-2">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-mint text-success"><x-ui.icon name="check" class="h-4 w-4" /></span>
+                    Approved doctors
+                </li>
+                <li class="flex items-center gap-2">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-mint text-success"><x-ui.icon name="card" class="h-4 w-4" /></span>
+                    Fees shown first
+                </li>
+                <li class="flex items-center gap-2">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-mint text-success"><x-ui.icon name="calendar" class="h-4 w-4" /></span>
+                    Request a time
+                </li>
+                <li class="flex items-center gap-2">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-mint text-success"><x-ui.icon name="shield" class="h-4 w-4" /></span>
+                    Your own bookings
+                </li>
+            </ul>
         </div>
-    </div>
-</section> -->
 
-
-<section class="-mt-[10px] bg-gradient-to-b from-[#e7f6fb] to-white pb-10 pt-[66px] md:pb-16 md:pt-[90px]">
-    <div class="mx-auto w-full max-w-[1440px] px-5 text-center">
-        <h1 class="text-4xl font-extrabold leading-[1.1] tracking-tight text-[#181A1E] md:text-6xl">
-            Find the right doctor.
-        </h1>
-        <p class="mt-4 text-xl font-semibold text-[#181A1E] md:text-[26px]">
-            Book in minutes. Get smarter care.
-        </p>
-        <p class="mx-auto mt-3 max-w-2xl text-base leading-7 text-[#4E545F] md:text-lg">
-            AI-assisted booking &amp; referrals for faster, transparent healthcare.
-        </p>
-
-        <form action="{{ route('doctors.index') }}" method="GET" class="mx-auto mt-10 flex w-full max-w-4xl flex-col gap-3 rounded-2xl border border-[#0066ff1f] bg-white p-3 shadow-[0_12px_40px_rgba(0,103,255,0.10)] md:flex-row md:items-center">
-            <label class="block w-full md:min-w-0 md:flex-1">
-                <span class="sr-only">Search by symptom or specialty</span>
-                <input
-                    type="text"
-                    name="query"
-                    placeholder="Search by symptom / specialty"
-                    class="h-12 w-full rounded-xl border border-[#c9dcff] bg-[#f7faff] px-4 text-base text-[#181A1E] placeholder:text-[#4E545F] focus:border-[#0067FF] focus:outline-none focus:ring-2 focus:ring-[#0067FF]/20">
-            </label>
-            <label class="block w-full md:w-56 md:shrink-0">
-                <span class="sr-only">City or locality</span>
-                <input
-                    type="text"
-                    name="city"
-                    placeholder="City / locality"
-                    class="h-12 w-full rounded-xl border border-[#c9dcff] bg-[#f7faff] px-4 text-base text-[#181A1E] placeholder:text-[#4E545F] focus:border-[#0067FF] focus:outline-none focus:ring-2 focus:ring-[#0067FF]/20">
-            </label>
-            <button type="submit" class="inline-flex h-12 w-full shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-[#0067FF] px-7 text-base font-semibold text-white transition hover:bg-[#0056d6] md:w-auto">
-                Search Doctors
-            </button>
-        </form>
-
-        <div class="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm">
-            <span class="text-[#4E545F]">Popular:</span>
-            @foreach (['Surgeon', 'Neurologist', 'Dermatologist'] as $specialty)
-            <a href="{{ route('doctors.index', ['query' => $specialty]) }}" class="rounded-full bg-white px-3.5 py-1.5 font-medium text-[#0067FF] ring-1 ring-[#0067FF]/20 transition hover:bg-[#0067FF] hover:text-white">
-                {{ $specialty }}
-            </a>
-            @endforeach
+        <div class="relative mx-auto w-full max-w-lg">
+            <div class="absolute -left-4 top-10 h-24 w-24 rounded-full bg-mint" aria-hidden="true"></div>
+            <div class="absolute -right-3 bottom-8 h-16 w-16 rounded-full bg-primary/15" aria-hidden="true"></div>
+            <div class="relative overflow-hidden rounded-[32px] border border-line bg-white shadow-card">
+                <img
+                    src="{{ asset('images/hero-img02.png') }}"
+                    alt=""
+                    width="640"
+                    height="760"
+                    class="h-[420px] w-full object-cover object-top sm:h-[480px]"
+                >
+            </div>
         </div>
     </div>
 </section>

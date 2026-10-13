@@ -1,70 +1,39 @@
-<section class="bg-gray-50 px-6 py-16">
-    <div class="mx-auto max-w-7xl">
-        <div class="mb-14 text-center">
-            <!-- <h2 class="mb-4 text-4xl font-extrabold text-gray-900">Frequently Asked Questions</h2>
-            <p class="mx-auto max-w-2xl text-lg text-gray-600">
-                Find answers to common questions about our platform, for both patients and doctors.
-            </p> -->
+{{--
+    FAQ answers follow the booking code:
+    fees are displayed, patients can cancel, there is no reschedule action,
+    and visit types are not online versus in person.
+--}}
+<section class="py-16 lg:py-20">
+    <div class="page">
+        <div class="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
             <x-section-heading
+                align="left"
+                :level="request()->routeIs('faq') ? 'h1' : 'h2'"
                 title="Frequently Asked Questions"
-                subtitle="From patients to specialists, our platform streamlines healthcare for all stakeholders" />
+                subtitle="Short answers based on how booking works today."
+            />
+            @unless (request()->routeIs('faq'))
+                <a href="{{ route('faq') }}" class="text-sm font-semibold text-primary no-underline hover:text-primary-hover">View all FAQs</a>
+            @endunless
         </div>
 
-
-        <div class="grid grid-cols-1 gap-12 md:grid-cols-2">
-            <div>
-                <h3 class="mb-6 text-2xl font-semibold text-gray-800">Patients</h3>
-                <div class="space-y-4">
-                    <details class="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
-                        <summary class="flex cursor-pointer items-center justify-between font-medium">
-                            How do consultation fees work?
-                            <span class="ml-2 text-indigo-500 transition-transform duration-300 group-open:rotate-45">+</span>
-                        </summary>
-                        <p class="mt-3 leading-relaxed text-gray-600">Consultation fees vary depending on the doctor and service. You will see the fee before confirming your appointment.</p>
-                    </details>
-                    <details class="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
-                        <summary class="flex cursor-pointer items-center justify-between font-medium">
-                            Is my medical data private?
-                            <span class="ml-2 text-indigo-500 transition-transform duration-300 group-open:rotate-45">+</span>
-                        </summary>
-                        <p class="mt-3 leading-relaxed text-gray-600">Yes, all medical data is securely stored and only accessible by you and your authorized doctors.</p>
-                    </details>
-                    <details class="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
-                        <summary class="flex cursor-pointer items-center justify-between font-medium">
-                            Can I choose online or in-person consultations?
-                            <span class="ml-2 text-indigo-500 transition-transform duration-300 group-open:rotate-45">+</span>
-                        </summary>
-                        <p class="mt-3 leading-relaxed text-gray-600">Yes, you can choose your preferred consultation mode while booking an appointment.</p>
-                    </details>
-                </div>
-            </div>
-
-            <div>
-                <h3 class="mb-6 text-2xl font-semibold text-gray-800">Doctors</h3>
-                <div class="space-y-4">
-                    <details class="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
-                        <summary class="flex cursor-pointer items-center justify-between font-medium">
-                            How do AI insights work?
-                            <span class="ml-2 text-indigo-500 transition-transform duration-300 group-open:rotate-45">+</span>
-                        </summary>
-                        <p class="mt-3 leading-relaxed text-gray-600">Our AI analyzes patient data to provide actionable insights and treatment suggestions to doctors.</p>
-                    </details>
-                    <details class="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
-                        <summary class="flex cursor-pointer items-center justify-between font-medium">
-                            Can I track referred patients?
-                            <span class="ml-2 text-indigo-500 transition-transform duration-300 group-open:rotate-45">+</span>
-                        </summary>
-                        <p class="mt-3 leading-relaxed text-gray-600">Yes, our platform allows you to track patients referred to you from other healthcare professionals.</p>
-                    </details>
-                    <details class="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
-                        <summary class="flex cursor-pointer items-center justify-between font-medium">
-                            How secure is patient data?
-                            <span class="ml-2 text-indigo-500 transition-transform duration-300 group-open:rotate-45">+</span>
-                        </summary>
-                        <p class="mt-3 leading-relaxed text-gray-600">Patient data is stored using industry-standard encryption and security protocols to ensure privacy and protection.</p>
-                    </details>
-                </div>
-            </div>
+        <div class="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            @foreach ([
+                ['q' => 'How do consultation fees work?', 'a' => 'Each doctor sets a consultation fee on their profile. You see that amount before you request an appointment. Medicare does not collect the payment on this website.'],
+                ['q' => 'How do I book an appointment?', 'a' => 'Create a patient account, open a doctor, choose a date and an open time, and send the request. It stays pending until the clinic updates the status.'],
+                ['q' => 'Can I reschedule or cancel an appointment?', 'a' => 'You can cancel from My Bookings while the visit is still open to cancel. To pick a different time, cancel that request and book another open slot. There is no separate reschedule button.'],
+                ['q' => 'Is my medical information private?', 'a' => 'Booking requires an account. Patients see their own appointments. Doctors and reception see the appointments their role is allowed to manage. Passwords are stored hashed, and forms use CSRF protection.'],
+                ['q' => 'Can I choose an online or in-person consultation?', 'a' => 'The booking form asks for a visit type: consultation, check-up, follow-up, or emergency. It does not offer a separate online or in-person choice.'],
+                ['q' => 'Who can see a doctor in the directory?', 'a' => 'The public list includes doctors whose approval status is approved and whose account is active. Other accounts stay off that list.'],
+            ] as $item)
+                <details class="card group p-5">
+                    <summary class="flex cursor-pointer items-center justify-between gap-4 text-left text-[15px] font-semibold text-navy">
+                        {{ $item['q'] }}
+                        <span class="text-xl leading-none text-primary transition group-open:rotate-45" aria-hidden="true">+</span>
+                    </summary>
+                    <p class="mt-3 text-sm leading-6 text-text">{{ $item['a'] }}</p>
+                </details>
+            @endforeach
         </div>
     </div>
 </section>

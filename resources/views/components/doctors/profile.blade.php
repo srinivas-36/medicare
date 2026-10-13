@@ -1,33 +1,29 @@
 @props(['doctor'])
 
 @php
-$photo = data_get($doctor, 'photo');
-$photoUrl = $photo && preg_match('/^https?:\/\//', $photo) ? $photo : ($photo ? asset($photo) : asset('images/avatar-icon.png'));
-$rating = round((float) data_get($doctor, 'averageRating', data_get($doctor, 'avgRating', 0)));
+    $photo = data_get($doctor, 'photo');
+    $photoUrl = $photo && preg_match('/^https?:\/\//', $photo) ? $photo : ($photo ? asset($photo) : asset('images/avatar-icon.png'));
+    $rating = number_format((float) data_get($doctor, 'averageRating', data_get($doctor, 'avgRating', 0)), 1);
 @endphp
 
-<div class="flex items-center gap-5">
-    <figure class="max-h-[200px] max-w-[200px]">
-        <img src="{{ $photoUrl }}" alt="{{ data_get($doctor, 'name') }}" class="w-full">
-    </figure>
+<div class="surface flex flex-col gap-6 p-6 sm:flex-row sm:items-start sm:p-8">
+    <img src="{{ $photoUrl }}" alt="{{ data_get($doctor, 'name') }}" class="h-40 w-40 shrink-0 rounded-3xl object-cover ring-4 ring-[#EAF3FF]">
 
-    <div>
-        <span class="rounded bg-[#CCF0F3] px-6 py-1 text-[12px] font-semibold leading-4 text-[#01B5C5] lg:px-6 lg:py-2 lg:text-[16px] lg:leading-10">
+    <div class="min-w-0">
+        <span class="inline-flex rounded-full bg-[#DDF8F1] px-3 py-1 text-sm font-semibold text-iris">
             {{ data_get($doctor, 'specialization') }}
         </span>
-        <h3 class="text-[22px] text-[#181A1E]">{{ data_get($doctor, 'name') }}</h3>
+        <h1 class="mt-3 text-3xl font-extrabold tracking-tight text-heading">{{ data_get($doctor, 'name') }}</h1>
 
-        <div class="flex items-center gap-[6px]">
-            <span class="flex items-center gap-[6px] text-[16px] font-semibold leading-5 text-[#181A1E] lg:leading-7">
-                <img src="{{ asset('images/Star.png') }}" alt=""> {{ $rating }}
-            </span>
-            <span class="text-[16px] font-normal leading-5 text-[#4E545F] lg:leading-7">
-                ({{ data_get($doctor, 'totalRating', 0) }})
-            </span>
-        </div>
+        @if ((int) data_get($doctor, 'totalRating', 0) > 0)
+            <p class="mt-3 text-sm text-heading">
+                {{ $rating }}
+                <span class="text-text">({{ data_get($doctor, 'totalRating') }} ratings)</span>
+            </p>
+        @endif
 
-        <p class="mt-3 text-[14px] font-normal leading-5 text-[#4E545F] md:mt-[18px] md:text-[15px] lg:max-w-[390px] lg:text-[18px] lg:leading-[30px]">
-            {{ data_get($doctor, 'bio') }}.
+        <p class="mt-4 max-w-xl text-base leading-7 text-text">
+            {{ data_get($doctor, 'bio') }}
         </p>
     </div>
 </div>

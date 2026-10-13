@@ -12,7 +12,7 @@ $action = $doctorId && \Illuminate\Support\Facades\Route::has('doctors.reviews.s
     <input type="hidden" name="rating" value="0" data-rating-input>
 
     <div>
-        <h3 class="mb-4 mt-0 text-[16px] font-semibold leading-6 text-[#181A1E]">
+        <h3 class="mb-4 mt-0 text-[16px] font-semibold leading-6 text-[#0B1F3A]">
             How would rate the Overall Experience
         </h3>
         <div data-rating-stars>
@@ -25,13 +25,13 @@ $action = $doctorId && \Illuminate\Support\Facades\Route::has('doctors.reviews.s
     </div>
 
     <div class="mt-[30px]">
-        <h3 class="mb-4 mt-0 text-[16px] font-semibold leading-6 text-[#181A1E]">
+        <h3 class="mb-4 mt-0 text-[16px] font-semibold leading-6 text-[#0B1F3A]">
             Share your Feedback or suggestions *
         </h3>
-        <textarea name="reviewText" rows="5" placeholder="Write your message" class="w-full rounded-md border border-solid border-[#0066ff34] px-4 py-3 outline-[#0067FF] focus:outline"></textarea>
+        <textarea name="reviewText" rows="5" placeholder="Write your message" class="w-full rounded-md border border-solid border-[#E2EAF4] px-4 py-3 outline-[#1769FF] focus:outline"></textarea>
     </div>
 
-    <button type="submit" class="mt-[30px] rounded-[50px] bg-[#0067FF] px-[35px] py-[15px] font-semibold text-white">
+    <button type="submit" class="btn-primary mt-6">
         Submit Feedback
     </button>
 </form>
@@ -49,7 +49,7 @@ $action = $doctorId && \Illuminate\Support\Facades\Route::has('doctors.reviews.s
 
             starButtons.forEach((star) => {
                 const selected = Number(star.dataset.star) <= active;
-                star.classList.toggle('text-[#FEB60D]', selected);
+                star.classList.toggle('text-[#E99A17]', selected);
                 star.classList.toggle('text-gray-400', !selected);
             });
         };

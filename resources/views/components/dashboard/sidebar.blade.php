@@ -1,171 +1,92 @@
+{{--
+    Dashboard menu.
+    Links come from config/dashboard.php for the signed-in role.
+    A link is shown only when that route exists. Otherwise it stays visible as "Soon".
+--}}
 @php
-$user = auth()->user();
-
-$role = $user->role ?? 'patient';
-$name = $user->name ?? 'Account';
-$email = $user->email ?? '';
-$photo = $user->photo ?? null;
-
-// Load navigation configuration for the current role.
-$roleConfig = config("dashboard.roles.{$role}")
-?? config('dashboard.roles.patient', [
-'label' => 'Patient',
-'links' => [],
-]);
-
-$roleLabel = $roleConfig['label'];
-$links = $roleConfig['links'];
-
-// Resolve profile photo.
-$photoUrl = null;
-
-if (is_string($photo) && $photo !== '') {
-$photoUrl = str_starts_with($photo, 'http')
-? $photo
-: asset($photo);
-}
-
-// Generate initials when no photo is available.
-$initials = collect(preg_split('/\s+/', trim($name)) ?: [])
-->filter()
-->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))
-->take(2)
-->implode('');
-
-$currentRoute = request()->route()?->getName();
-
-$currentPath = '/' . ltrim(request()->path(), '/');
+    $user = auth()->user();
+    $role = $user->role ?? 'patient';
+    $roleConfig = config("dashboard.roles.{$role}")
+        ?? config('dashboard.roles.patient', [
+            'label' => 'Patient',
+            'links' => [],
+        ]);
+    $roleLabel = $roleConfig['label'];
+    $links = $roleConfig['links'];
+    $currentPath = '/'.ltrim(request()->path(), '/');
 @endphp
 
-<div class="lg:w-[280px] lg:shrink-0">
+<div
+    x-show="navOpen"
+    x-cloak
+    class="fixed inset-0 z-40 bg-navy/40 lg:hidden"
+    @click="navOpen = false"
+></div>
 
-    {{-- Mobile menu toggle --}}
-    <input
-        id="dashboard-nav"
-        type="checkbox"
-        class="peer hidden">
+<aside
+    class="fixed inset-y-0 left-0 z-50 flex w-[280px] -translate-x-full flex-col border-r border-line bg-white transition-transform duration-200 lg:static lg:z-0 lg:!translate-x-0"
+    :class="navOpen ? '!translate-x-0' : '-translate-x-full'"
+>
+    <div class="flex h-16 shrink-0 items-center justify-between border-b border-line px-5">
+        <a href="{{ route('dashboard') }}" class="flex items-center no-underline">
+            <img src="{{ asset('images/logo.png') }}" alt="Medicare" class="block h-8 w-auto">
+        </a>
+        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-navy lg:hidden" @click="navOpen = false" aria-label="Close menu">
+            <x-ui.icon name="close" class="h-5 w-5" />
+        </button>
+    </div>
 
-    <label
-        for="dashboard-nav"
-        class="mb-4 flex h-12 cursor-pointer items-center justify-between rounded-xl border border-[#0066ff1f] bg-white px-4 text-sm font-semibold text-[#181A1E] shadow-[0_12px_40px_rgba(0,103,255,0.08)] lg:hidden">
-        Menu
+    <div class="px-5 pt-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Signed in as</p>
+        <p class="mt-1 text-sm font-semibold text-navy">{{ $roleLabel }}</p>
+    </div>
 
-        <svg
-            class="h-5 w-5 text-[#0067FF]"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden="true">
-            <path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z" />
-        </svg>
-    </label>
-
-    <aside
-        class="hidden rounded-2xl border border-[#0066ff1f] bg-white p-5 shadow-[0_12px_40px_rgba(0,103,255,0.08)] peer-checked:block lg:block">
-
-        {{-- User profile --}}
-        <div class="flex flex-col items-center border-b border-[#0066ff1f] pb-5 text-center">
-
-            @if ($photoUrl)
-            <img
-                src="{{ $photoUrl }}"
-                alt="{{ $name }}"
-                class="h-20 w-20 rounded-full border-2 border-[#0067FF] object-cover">
-            @else
-            <span
-                class="flex h-20 w-20 items-center justify-center rounded-full border-2 border-[#0067FF] bg-[#e8f2ff] text-xl font-bold text-[#0067FF]">
-                {{ $initials !== '' ? $initials : 'M' }}
-            </span>
-            @endif
-
-            <h2 class="mt-4 text-lg font-bold leading-7 text-[#181A1E]">
-                {{ $name }}
-            </h2>
-
-            @if ($email !== '')
-            <p class="mt-1 text-sm leading-6 text-[#4E545F]">
-                {{ $email }}
-            </p>
-            @endif
-
-            <span
-                class="mt-3 inline-flex rounded-full bg-[#e8f2ff] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0067FF]">
-                {{ $roleLabel }}
-            </span>
-        </div>
-
-        {{-- Role-specific navigation --}}
-        <nav class="mt-5" aria-label="{{ $roleLabel }} dashboard">
-            <ul class="space-y-1.5">
-
-                @foreach ($links as $link)
+    <nav class="mt-4 min-h-0 flex-1 overflow-y-auto px-3 pb-4" aria-label="{{ $roleLabel }} dashboard">
+        <ul class="space-y-1">
+            @foreach ($links as $link)
                 @php
-                $routeName = $link['route'] ?? null;
-                $fallback = $link['fallback'] ?? null;
-
-                $hasRoute = $routeName
-                && \Illuminate\Support\Facades\Route::has($routeName);
-
-                $href = $hasRoute
-                ? route($routeName)
-                : ($fallback ? url($fallback) : null);
-
-                $isActive = (
-                $hasRoute
-                && request()->routeIs($routeName)
-                ) || (
-                $fallback
-                && rtrim($currentPath, '/') === rtrim($fallback, '/')
-                );
+                    $routeName = $link['route'] ?? null;
+                    $fallback = $link['fallback'] ?? null;
+                    $hasRoute = $routeName && \Illuminate\Support\Facades\Route::has($routeName);
+                    $href = $hasRoute ? route($routeName) : ($fallback ? url($fallback) : null);
+                    $isActive = ($hasRoute && (request()->routeIs($routeName) || request()->routeIs($routeName.'.*')))
+                        || ($fallback && rtrim($currentPath, '/') === rtrim($fallback, '/'));
+                    $icon = $link['icon'] ?? 'grid';
                 @endphp
 
                 <li>
                     @if ($href)
-                    <a
-                        href="{{ $href }}"
-                        @if ($isActive) aria-current="page" @endif
-                        @class([ 'flex h-11 items-center rounded-xl px-4 text-[15px] font-semibold leading-7 transition' , 'bg-[#0067FF] text-white'=> $isActive,
-                        'text-[#4E545F] hover:bg-[#f7faff] hover:text-[#0067FF]' => !$isActive,
-                        ])
+                        <a
+                            href="{{ $href }}"
+                            @if ($isActive) aria-current="page" @endif
+                            @click="navOpen = false"
+                            @class([
+                                'flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-semibold transition',
+                                'bg-primary text-white shadow-[0_8px_18px_rgba(23,105,255,0.22)]' => $isActive,
+                                'text-text hover:bg-light hover:text-primary' => ! $isActive,
+                            ])
                         >
-                        {{ $link['label'] }}
-                    </a>
+                            <x-ui.icon :name="$icon" @class(['h-[18px] w-[18px]', 'text-white' => $isActive, 'text-primary' => ! $isActive]) />
+                            {{ $link['label'] }}
+                        </a>
                     @else
-                    <span
-                        class="flex h-11 items-center justify-between rounded-xl px-4 text-[15px] font-semibold leading-7 text-[#4E545F]/70"
-                        title="This screen will be added in a later step">
-                        {{ $link['label'] }}
-
-                        <span class="rounded-full bg-[#f7faff] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#0067FF]">
-                            Soon
+                        <span class="flex h-11 items-center justify-between rounded-xl px-3 text-[15px] font-semibold text-muted" title="This screen is not available yet">
+                            <span class="inline-flex items-center gap-3">
+                                <x-ui.icon :name="$icon" class="h-[18px] w-[18px] text-muted" />
+                                {{ $link['label'] }}
+                            </span>
+                            <span class="badge-info">Soon</span>
                         </span>
-                    </span>
                     @endif
                 </li>
-                @endforeach
+            @endforeach
+        </ul>
+    </nav>
 
-            </ul>
-        </nav>
-
-        {{-- Logout --}}
-        <div class="mt-8">
-            @if (\Illuminate\Support\Facades\Route::has('logout'))
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-
-                <button
-                    type="submit"
-                    class="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#181A1E] text-base font-semibold text-white hover:bg-[#2a2d33]">
-                    Logout
-                </button>
-            </form>
-            @else
-            <a
-                href="{{ route('login') }}"
-                class="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#181A1E] text-base font-semibold text-white hover:bg-[#2a2d33]">
-                Logout
-            </a>
-            @endif
-        </div>
-
-    </aside>
-</div>
+    <div class="shrink-0 border-t border-line p-4">
+        <a href="{{ route('home') }}" class="flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-text no-underline hover:bg-light hover:text-primary">
+            <x-ui.icon name="arrow" class="h-4 w-4 rotate-180" />
+            Public site
+        </a>
+    </div>
+</aside>

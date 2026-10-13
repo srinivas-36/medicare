@@ -9,8 +9,16 @@ class PatientProfile extends Model
     protected $fillable = [
         'user_id',
         'age',
-        'blood_type'
+        'blood_type',
+        'health_notes',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'health_notes' => 'array',
+        ];
+    }
 
     public function user()
     {

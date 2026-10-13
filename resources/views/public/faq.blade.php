@@ -1,5 +1,8 @@
 @extends('layouts.public')
 
+@section('title', 'FAQ')
+@section('description', 'Answers about consultation fees, booking, cancellation, and who can see your appointments.')
+
 @section('content')
-<h1>Faq Page</h1>
+    @include('components.home.faq')
 @endsection

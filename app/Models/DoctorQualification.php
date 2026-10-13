@@ -14,6 +14,14 @@ class DoctorQualification extends Model
         'end_date',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+        ];
+    }
+
     public function doctor()
     {
         return $this->belongsTo(Doctor::class);

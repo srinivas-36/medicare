@@ -3,14 +3,13 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
+use App\Support\ProfilePhoto;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class RegisteredUserController extends Controller
@@ -25,22 +24,45 @@ class RegisteredUserController extends Controller
 
     /**
      * Handle an incoming registration request.
-     *
-     * @throws ValidationException
      */
-    public function store(Request $request): RedirectResponse
+    public function store(RegisterRequest $request): RedirectResponse
     {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+        $data = $request->validated();
+        $photo = ProfilePhoto::store($request->file('photo'), $data['role']);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+        try {
+            $user = DB::transaction(function () use ($data, $photo) {
+                $user = User::create([
+                    'name' => $data['name'],
+                    'slug' => User::uniqueSlug($data['name']),
+                    'email' => $data['email'],
+                    'password' => $data['password'],
+                    'phone' => $data['phone'],
+                    'photo' => $photo,
+                    'gender' => $data['gender'] ?? null,
+                    'role' => $data['role'],
+                    'is_active' => true,
+                ]);
+
+                if ($user->role === 'patient') {
+                    $user->patient_profile()->create([
+                        'age' => $data['age'],
+                    ]);
+                }
+
+                if ($user->role === 'doctor') {
+                    $user->doctor()->create([
+                        'approval_status' => 'pending',
+                    ]);
+                }
+
+                return $user;
+            });
+        } catch (\Throwable $exception) {
+            ProfilePhoto::delete($photo);
+
+            throw $exception;
+        }
 
         event(new Registered($user));
 

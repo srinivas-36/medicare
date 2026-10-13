@@ -1,51 +1,52 @@
 @props(['doctor'])
 
 @php
-$formatDate = function ($date) {
-return $date ? date('F j, Y', strtotime($date)) : '';
-};
+    $formatDate = function ($date) {
+        return $date ? date('F j, Y', strtotime($date)) : '';
+    };
 @endphp
 
-<div>
+<div class="space-y-10">
     <div>
-        <h3 class="flex items-center gap-2 text-[20px] font-semibold leading-[30px] text-[#181A1E]">
-            About of
-            <span class="text-[24px] font-bold leading-9 text-[#01B5C5]">{{ data_get($doctor, 'name') }}</span>
-        </h3>
-        <p class="mt-3 text-base font-normal leading-7 text-[#4E545F] md:mt-[18px] md:text-[18px] md:leading-[30px]">
+        <h2 class="text-xl font-bold text-heading">About {{ data_get($doctor, 'name') }}</h2>
+        <p class="mt-3 text-base leading-7 text-text">
             {{ data_get($doctor, 'about') }}
         </p>
     </div>
 
-    <div class="mt-12">
-        <h3 class="text-[20px] font-semibold leading-[30px] text-[#181A1E]">Education</h3>
-        <ul class="pt-4 md:p-5">
-            @foreach (data_get($doctor, 'qualifications') ?? [] as $item)
-            <li class="mb-[30px] flex flex-col sm:flex-row sm:items-end sm:justify-between md:gap-5">
-                <div>
-                    <span class="text-[15px] font-semibold leading-6 text-[#01B5C5]">
-                        {{ $formatDate(data_get($item, 'start_date')) }} -{{ $formatDate(data_get($item, 'end_date')) }}
-                    </span>
-                    <p class="text-[16px] font-medium leading-6 text-[#4E545F]">{{ data_get($item, 'degree') }}</p>
-                </div>
-                <p class="text-[14px] font-medium leading-5 text-[#4E545F]">{{ data_get($item, 'institution') }}</p>
-            </li>
-            @endforeach
+    <div>
+        <h2 class="text-xl font-bold text-heading">Education</h2>
+        <ul class="mt-4 space-y-4">
+            @forelse (data_get($doctor, 'qualifications') ?? [] as $item)
+                <li class="surface flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="font-semibold text-heading">{{ data_get($item, 'degree') }}</p>
+                        <p class="text-sm text-text">{{ data_get($item, 'institution') }}</p>
+                    </div>
+                    <p class="text-sm font-semibold text-iris">
+                        {{ $formatDate(data_get($item, 'start_date')) }} – {{ $formatDate(data_get($item, 'end_date')) }}
+                    </p>
+                </li>
+            @empty
+                <li class="text-sm text-text">Education details will appear here once the doctor adds them.</li>
+            @endforelse
         </ul>
     </div>
 
-    <div class="mt-12">
-        <h3 class="text-[20px] font-semibold leading-[30px] text-[#181A1E]">Experience</h3>
-        <ul class="grid gap-[30px] pt-4 sm:grid-cols-2 md:p-5">
-            @foreach (data_get($doctor, 'experiences') ?? [] as $item)
-            <li class="rounded bg-[#fff9ea] p-4">
-                <span class="text-[15px] font-semibold leading-6 text-[#FEB60D]">
-                    {{ $formatDate(data_get($item, 'start_date')) }} - {{ $formatDate(data_get($item, 'end_date')) }}
-                </span>
-                <p class="text-[16px] font-medium leading-6 text-[#4E545F]">{{ data_get($item, 'designation') }}</p>
-                <p class="text-[14px] font-medium leading-5 text-[#4E545F]">{{ data_get($item, 'hospital_name') }}</p>
-            </li>
-            @endforeach
+    <div>
+        <h2 class="text-xl font-bold text-heading">Experience</h2>
+        <ul class="mt-4 grid gap-4 sm:grid-cols-2">
+            @forelse (data_get($doctor, 'experiences') ?? [] as $item)
+                <li class="rounded-2xl bg-[#fff8ea] px-5 py-4">
+                    <p class="text-sm font-semibold text-[#b7791f]">
+                        {{ $formatDate(data_get($item, 'start_date')) }} – {{ $formatDate(data_get($item, 'end_date')) }}
+                    </p>
+                    <p class="mt-1 font-semibold text-heading">{{ data_get($item, 'designation') }}</p>
+                    <p class="text-sm text-text">{{ data_get($item, 'hospital_name') }}</p>
+                </li>
+            @empty
+                <li class="text-sm text-text">Experience details will appear here once the doctor adds them.</li>
+            @endforelse
         </ul>
     </div>
 </div>
