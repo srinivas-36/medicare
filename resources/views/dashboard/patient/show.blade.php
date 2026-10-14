@@ -42,33 +42,20 @@
 @endphp
 
 @section('content')
-    <section class="dash-banner">
-        <div class="flex flex-wrap items-end justify-between gap-5">
-            <div class="max-w-2xl">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Patient profile</p>
-                <h1 class="mt-2 text-3xl font-bold tracking-tight">{{ $name }}</h1>
-                <p class="mt-3 text-sm leading-6 text-white/80">
-                    Your contact details and the health notes doctors see with a booking.
-                </p>
-            </div>
-            <a href="{{ $editUrl }}" class="dash-banner-btn">Edit profile</a>
+    <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div class="min-w-0">
+            <h1 class="truncate text-2xl font-semibold tracking-tight text-heading sm:text-[26px]">{{ $name }}</h1>
+            <p class="mt-1 text-sm text-body">Contact details and the health notes shared with a booking.</p>
         </div>
-        <div class="mt-6 flex flex-wrap gap-2">
-            @if ($email !== '')
-                <span class="dash-chip">{{ $email }}</span>
-            @endif
-            @if ($bloodType !== '')
-                <span class="dash-chip">Blood type {{ $bloodType }}</span>
-            @endif
-        </div>
-    </section>
+        <a href="{{ $editUrl }}" class="btn-primary">Edit profile</a>
+    </header>
 
     @if (session('status'))
         <p class="mt-6 rounded-2xl border border-[#b7ebc9] bg-[#e8f8ef] px-5 py-4 text-sm font-medium text-[#0f9f6e]">{{ session('status') }}</p>
     @endif
 
-    <section class="mt-6 rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-        <h2 class="text-xl font-bold text-[#0B1F3A]">Personal information</h2>
+    <section class="mt-6 rounded-xl border border-line bg-white p-5 shadow-card">
+        <h2 class="text-base font-semibold text-heading">Personal information</h2>
 
         <div class="mt-6 flex flex-wrap items-center gap-4">
             @if ($photoUrl)
@@ -94,8 +81,8 @@
         </div>
     </section>
 
-    <section class="mt-6 rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-        <h2 class="text-xl font-bold text-[#0B1F3A]">Health notes</h2>
+    <section class="mt-6 rounded-xl border border-line bg-white p-5 shadow-card">
+        <h2 class="text-base font-semibold text-heading">Health notes</h2>
         <p class="mt-1 text-sm leading-6 text-[#53647D]">Share what you know. “Not known” is fine when you are unsure.</p>
 
         <div class="mt-6 grid gap-5 sm:grid-cols-3">

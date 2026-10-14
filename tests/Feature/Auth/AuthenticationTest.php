@@ -42,6 +42,48 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_login_does_not_return_a_patient_to_the_doctor_dashboard(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'patient',
+        ]);
+
+        $this->get('/doctor/dashboard')->assertRedirect(route('login'));
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $this->get(route('dashboard'))
+            ->assertRedirect(route('patient.dashboard'));
+
+        $this->get(route('patient.dashboard'))->assertOk();
+    }
+
+    public function test_a_doctor_without_a_profile_can_open_the_dashboard(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'doctor',
+            'is_active' => true,
+        ]);
+
+        $this->get('/doctor/dashboard')->assertRedirect(route('login'));
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect('/doctor/dashboard');
+
+        $this->get('/doctor/dashboard')
+            ->assertOk();
+
+        $this->assertDatabaseHas('doctors', [
+            'user_id' => $user->id,
+            'approval_status' => 'pending',
+        ]);
+    }
+
     public function test_users_can_logout(): void
     {
         $user = User::factory()->create();

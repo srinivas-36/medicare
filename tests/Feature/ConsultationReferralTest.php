@@ -2,15 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\GenerateAiAnalysis;
 use App\Jobs\GenerateClinicalAnalysis;
+use App\Models\AiAnalysis;
 use App\Models\Appointment;
 use App\Models\AppointmentReport;
 use App\Models\Consultation;
 use App\Models\Doctor;
 use App\Models\PatientProfile;
 use App\Models\Referral;
+use App\Models\TimeSlot;
 use App\Models\User;
+use App\Support\MockReferralDirectory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -98,7 +103,8 @@ class ConsultationReferralTest extends TestCase
             ->assertSee('42')
             ->assertSee('O+')
             ->assertSee('128/82')
-            ->assertSee('AI analysis is not available for this booking yet.')
+            ->assertSee('Not started')
+            ->assertDontSee('AI analysis is not available for this booking yet.')
             ->assertDontSee('Earlier cluster headache')
             ->assertDontSee('old-labs.pdf')
             ->assertDontSee('Zephyr rash from clinic B')
@@ -165,7 +171,7 @@ class ConsultationReferralTest extends TestCase
             ->assertOk();
     }
 
-    public function test_saving_a_consult_on_a_confirmed_visit_persists_the_note_and_queues_the_job(): void
+    public function test_saving_a_consult_persists_the_note_without_starting_analysis(): void
     {
         [$doctorUser, $doctor] = $this->makeDoctor('Dr Maya Chen');
         $patient = $this->makePatient();
@@ -207,9 +213,8 @@ class ConsultationReferralTest extends TestCase
             'plan' => 'Hydration and review.',
         ]);
 
-        Queue::assertPushed(GenerateClinicalAnalysis::class, function (GenerateClinicalAnalysis $job) {
-            return $job->consultationId === Consultation::query()->value('id');
-        });
+        Queue::assertNotPushed(GenerateClinicalAnalysis::class);
+        Queue::assertNotPushed(GenerateAiAnalysis::class);
     }
 
     public function test_analysis_job_stores_a_ready_summary_and_referral_brief(): void
@@ -275,23 +280,36 @@ class ConsultationReferralTest extends TestCase
         ]);
 
         config([
-            'services.ai.base_url' => 'https://api.openai.com/v1',
+            'services.ai.base_url' => 'https://generativelanguage.googleapis.com/v1beta',
             'services.ai.key' => 'test-key',
-            'services.ai.model' => 'gpt-4o-mini',
+            'services.ai.model' => 'gemini-3.8-flash',
         ]);
 
         Http::preventStrayRequests();
         Http::fake([
-            'https://api.openai.com/v1/chat/completions' => Http::response([
-                'choices' => [[
-                    'message' => [
-                        'content' => json_encode([
-                            'summary' => 'Short summary.',
-                            'history_relevant_to_this_doctor' => 'Earlier headache visit.',
-                            'report_inventory' => 'cbc-results.pdf was attached.',
-                            'points_for_the_doctor' => 'Review blood pressure.',
-                            'referral_brief' => 'Brief for the next doctor.',
-                        ]),
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'patientInfo' => [
+                                    'name' => 'Amina Rahman',
+                                    'age' => '42',
+                                    'gender' => 'not recorded',
+                                    'bloodPressure' => '128/82',
+                                    'diabetic' => 'not recorded',
+                                    'hyperthyroidism' => 'not recorded',
+                                ],
+                                'overallSummary' => 'Short summary.',
+                                'reportAnalyses' => [[
+                                    'groupName' => 'Blood Test Reports',
+                                    'analysis' => 'cbc-results.pdf was attached.',
+                                    'warnings' => [],
+                                ]],
+                                'doctorRecommendations' => ['Review blood pressure.'],
+                                'referralBrief' => 'Brief for the next doctor.',
+                            ]),
+                        ]],
                     ],
                 ]],
             ]),
@@ -315,7 +333,9 @@ class ConsultationReferralTest extends TestCase
             return str_contains($body, 'cbc-results.pdf')
                 && str_contains($body, 'Earlier cluster headache')
                 && str_contains($body, 'Typed migraine note')
-                && str_contains((string) $request->url(), '/chat/completions')
+                && str_contains((string) $request->url(), ':generateContent')
+                && $request->hasHeader('x-goog-api-key', 'test-key')
+                && ! str_contains((string) $request->url(), 'test-key')
                 && ! str_contains($body, 'secret-storage-path')
                 && ! str_contains($body, $patient->email)
                 && ! str_contains($body, '555-0199')
@@ -341,13 +361,13 @@ class ConsultationReferralTest extends TestCase
         ]);
 
         config([
-            'services.ai.base_url' => 'https://api.openai.com/v1',
+            'services.ai.base_url' => 'https://generativelanguage.googleapis.com/v1beta',
             'services.ai.key' => 'test-key',
-            'services.ai.model' => 'gpt-4o-mini',
+            'services.ai.model' => 'gemini-3.8-flash',
         ]);
 
         Http::fake([
-            'https://api.openai.com/v1/*' => Http::response('unavailable', 500),
+            'https://generativelanguage.googleapis.com/*' => Http::response('unavailable', 500),
         ]);
 
         GenerateClinicalAnalysis::dispatchSync($consultation->id);
@@ -448,7 +468,7 @@ class ConsultationReferralTest extends TestCase
                 'reason' => 'Needs a cardiology opinion.',
             ])
             ->assertRedirect(route('doctor.appointments.show', $appointment))
-            ->assertSessionHas('status', 'Referral sent.');
+            ->assertSessionHas('status', 'Referral sent to Dr Noah Shah.');
 
         $this->assertDatabaseCount('appointments', 1);
         $this->assertDatabaseCount('referrals', 1);
@@ -519,6 +539,121 @@ class ConsultationReferralTest extends TestCase
             ->assertSee('Dr Maya Chen');
     }
 
+    public function test_referral_sends_the_patient_summary_with_only_the_selected_reports(): void
+    {
+        [$fromUser, $from] = $this->makeDoctor('Dr Maya Chen', 'Surgeon');
+        [$toUser, $to] = $this->makeDoctor('Dr Noah Shah', 'Cardiology');
+        $patient = $this->makePatient('Amina Rahman', ['gender' => 'female']);
+
+        PatientProfile::query()->create([
+            'user_id' => $patient->id,
+            'age' => 42,
+            'blood_type' => 'O+',
+        ]);
+
+        $appointment = $this->appointment($patient, $from, [
+            'status' => 'confirmed',
+            'reason' => 'Current sinus check',
+        ]);
+
+        $kept = AppointmentReport::query()->create([
+            'appointment_id' => $appointment->id,
+            'group_name' => 'Blood Test Reports',
+            'path' => 'appointment-reports/cbc.pdf',
+            'original_name' => 'cbc-results.pdf',
+        ]);
+        $held = AppointmentReport::query()->create([
+            'appointment_id' => $appointment->id,
+            'group_name' => 'X-Ray Scans',
+            'path' => 'appointment-reports/scan.pdf',
+            'original_name' => 'later-scan.pdf',
+        ]);
+
+        AiAnalysis::query()->create([
+            'appointment_id' => $appointment->id,
+            'doctor_id' => $from->id,
+            'patient_id' => $patient->id,
+            'initiated_by' => $fromUser->id,
+            'status' => 'completed',
+            'selected_report_ids' => [$kept->id, $held->id],
+            'original_summary' => 'Sinus summary prepared for the next doctor.',
+            'structured_output' => [
+                'highlights' => ['Sinus pressure'],
+                'key_findings' => [[
+                    'title' => 'Hemoglobin',
+                    'explanation' => 'Within the printed range.',
+                    'observed_value' => '13.2',
+                    'unit' => 'g/dL',
+                    'reference_range' => '12-16',
+                ]],
+                'suggested_review_actions' => [[
+                    'text' => 'Review the blood count with the patient.',
+                ]],
+                'limitations' => 'Only the selected blood report was read.',
+                'report_interpretations' => [
+                    [
+                        'source_report_id' => $kept->id,
+                        'source_label' => 'cbc-results.pdf',
+                        'narrative' => 'Blood count is available for review.',
+                        'rows' => [[
+                            'parameter' => 'Hemoglobin',
+                            'observed_value' => '13.2',
+                            'unit' => 'g/dL',
+                            'reference_range' => '12-16',
+                            'flag' => 'normal',
+                        ]],
+                    ],
+                    [
+                        'source_report_id' => $held->id,
+                        'source_label' => 'later-scan.pdf',
+                        'narrative' => 'Scan reading that should stay off this referral.',
+                        'rows' => [],
+                    ],
+                ],
+            ],
+            'completed_at' => now(),
+        ]);
+
+        $this->actingAs($fromUser)
+            ->get(route('doctor.appointments.show', $appointment))
+            ->assertOk()
+            ->assertSee('Sinus summary prepared for the next doctor.')
+            ->assertSee('This summary is sent with the reports you select below.');
+
+        $this->actingAs($fromUser)
+            ->post(route('doctor.referrals.store', $appointment), [
+                'to_doctor_id' => $to->id,
+                'reason' => 'Needs a cardiology opinion.',
+                'report_ids_present' => '1',
+                'report_ids' => [$kept->id],
+            ])
+            ->assertRedirect(route('doctor.appointments.show', $appointment));
+
+        $analysis = AiAnalysis::query()->first();
+        $analysis->update(['original_summary' => 'Summary rewritten after the referral.']);
+
+        $referral = Referral::query()->first();
+        $packet = $referral->summary_snapshot['patient_summary'];
+
+        $this->assertSame('analysis', $packet['source']);
+        $this->assertSame('Sinus summary prepared for the next doctor.', $packet['text']);
+        $this->assertSame([$kept->id], $referral->summary_snapshot['report_ids']);
+        $this->assertSame('Blood count is available for review.', $packet['report_notes'][0]['narrative']);
+        $this->assertCount(1, $packet['report_notes']);
+
+        $this->actingAs($toUser)
+            ->get(route('doctor.referrals.show', $referral))
+            ->assertOk()
+            ->assertSee('Sinus summary prepared for the next doctor.')
+            ->assertSee('Within the printed range.')
+            ->assertSee('Blood count is available for review.')
+            ->assertSee('cbc-results.pdf')
+            ->assertSee('Female')
+            ->assertDontSee('Scan reading that should stay off this referral.')
+            ->assertDontSee('later-scan.pdf')
+            ->assertDontSee('Summary rewritten after the referral.');
+    }
+
     public function test_accept_and_decline_only_move_a_sent_referral_once(): void
     {
         [$fromUser, $from] = $this->makeDoctor('Dr Maya Chen');
@@ -531,14 +666,14 @@ class ConsultationReferralTest extends TestCase
                 'to_doctor_id' => $to->id,
                 'reason' => 'First opinion.',
             ])
-            ->assertSessionHas('status', 'Referral sent.');
+            ->assertSessionHas('status', 'Referral sent to Dr Noah Shah.');
 
         $this->actingAs($fromUser)
             ->post(route('doctor.referrals.store', $appointment), [
                 'to_doctor_id' => $to->id,
                 'reason' => 'Second opinion.',
             ])
-            ->assertSessionHas('status', 'Referral sent.');
+            ->assertSessionHas('status', 'Referral sent to Dr Noah Shah.');
 
         $first = Referral::query()->orderBy('id')->first();
         $second = Referral::query()->orderByDesc('id')->first();
@@ -561,12 +696,127 @@ class ConsultationReferralTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($toUser)
-            ->post(route('doctor.referrals.decline', $second))
+            ->post(route('doctor.referrals.decline', $second), [
+                'decline_reason' => 'Schedule is full.',
+            ])
             ->assertRedirect();
 
         $this->assertSame('declined', $second->fresh()->status);
+        $this->assertSame('Schedule is full.', $second->fresh()->decline_reason);
         $this->assertNotNull($second->fresh()->responded_at);
         $this->assertSame('accepted', $first->fresh()->status);
+
+        $this->actingAs($fromUser)
+            ->get(route('doctor.referrals.show', $second))
+            ->assertOk()
+            ->assertSee('Schedule is full.')
+            ->assertSee('declined this referral');
+    }
+
+    public function test_a_doctor_can_choose_another_doctor_and_that_doctor_can_book_the_visit(): void
+    {
+        [$fromUser, $from] = $this->makeDoctor('Dr Maya Chen', 'Surgeon');
+        [$toUser, $to] = $this->makeDoctor('Dr Noah Shah', 'Cardiology');
+        $this->makeDoctor('Dr Pending Cole', 'Neurology', 'pending');
+        $patient = $this->makePatient('Amina Rahman');
+        $appointment = $this->appointment($patient, $from, [
+            'status' => 'confirmed',
+            'reason' => 'Current sinus check',
+        ]);
+        $date = now()->addDays(2)->toDateString();
+
+        TimeSlot::query()->create([
+            'doctor_id' => $to->id,
+            'day' => strtolower(Carbon::parse($date)->format('l')),
+            'starting_time' => '09:00',
+            'ending_time' => '12:00',
+            'is_available' => true,
+        ]);
+
+        $this->actingAs($fromUser)
+            ->get(route('doctor.appointments.show', $appointment))
+            ->assertOk()
+            ->assertSee('Refer to another doctor')
+            ->assertSee('Dr Noah Shah')
+            ->assertSee('Cardiology')
+            ->assertSee('name="to_doctor_id"', false)
+            ->assertDontSee('Dr Pending Cole')
+            ->assertDontSee('Sample specialists');
+
+        $this->actingAs($patient)
+            ->get(route('patient.bookings.show', $appointment))
+            ->assertOk()
+            ->assertDontSee('Refer to another doctor')
+            ->assertDontSee('name="to_doctor_id"', false);
+
+        $this->actingAs($fromUser)
+            ->post(route('doctor.referrals.store', $appointment), [
+                'to_doctor_id' => $to->id,
+                'reason' => 'Needs a cardiology opinion.',
+                'clinical_question' => 'Is this cardiac?',
+                'urgency' => 'soon',
+                'report_ids_present' => '1',
+            ])
+            ->assertRedirect(route('doctor.appointments.show', $appointment))
+            ->assertSessionHas('status', 'Referral sent to Dr Noah Shah.');
+
+        $referral = Referral::query()->firstOrFail();
+        $this->assertSame('soon', $referral->urgency);
+        $this->assertSame('Is this cardiac?', $referral->clinical_question);
+        $this->assertSame(0, $referral->reports()->count());
+        $this->assertTrue($toUser->notifications->contains(fn ($note) => ($note->data['title'] ?? null) === 'Referral received'));
+        $this->assertTrue($patient->notifications->contains(fn ($note) => ($note->data['title'] ?? null) === 'You were referred'));
+
+        $this->actingAs($fromUser)
+            ->get(route('doctor.referrals.show', $referral))
+            ->assertOk()
+            ->assertSee('Waiting for Dr Noah Shah')
+            ->assertSee('Is this cardiac?')
+            ->assertDontSee('name="decline_reason"', false);
+
+        $this->actingAs($toUser)
+            ->post(route('doctor.referrals.accept', $referral))
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Referral accepted.');
+
+        $this->assertTrue($fromUser->fresh()->notifications->contains(
+            fn ($note) => ($note->data['title'] ?? null) === 'Referral accepted'
+        ));
+
+        $this->actingAs($toUser)
+            ->post(route('doctor.referrals.schedule', $referral), [
+                'date' => $date,
+                'time' => '09:00',
+            ])
+            ->assertSessionHas('status', 'Referral appointment booked.');
+
+        $referral->refresh();
+        $booked = Appointment::query()->where('source', 'referral')->first();
+
+        $this->assertSame('appointment_booked', $referral->status);
+        $this->assertNotNull($booked);
+        $this->assertSame($to->id, (int) $booked->doctor_id);
+        $this->assertSame($patient->id, (int) $booked->patient_id);
+        $this->assertSame($referral->id, (int) $booked->referral_id);
+        $this->assertSame((int) $booked->id, (int) $referral->proposed_appointment_id);
+        $this->assertTrue($patient->fresh()->notifications->contains(
+            fn ($note) => ($note->data['title'] ?? null) === 'Appointment confirmed'
+        ));
+        $this->assertTrue($fromUser->fresh()->notifications->contains(
+            fn ($note) => ($note->data['title'] ?? null) === 'Referral visit booked'
+        ));
+
+        $this->actingAs($toUser)
+            ->get(route('doctor.referrals.show', $referral))
+            ->assertOk()
+            ->assertSee('Open the booked visit')
+            ->assertSee('Appointment booked');
+
+        $this->actingAs($fromUser)
+            ->get(route('doctor.patients.show', $patient))
+            ->assertOk()
+            ->assertSee('Dr Noah Shah')
+            ->assertSee('Appointment booked');
     }
 
     public function test_referring_to_yourself_or_a_pending_doctor_fails_validation(): void
@@ -613,6 +863,80 @@ class ConsultationReferralTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseCount('referrals', 0);
+    }
+
+    public function test_a_visit_with_no_other_doctor_walks_through_sample_specialists(): void
+    {
+        [$doctorUser, $doctor] = $this->makeDoctor('Dr Maya Chen');
+        $patient = $this->makePatient();
+        $appointment = $this->appointment($patient, $doctor, [
+            'status' => 'confirmed',
+            'reason' => 'Chest pain and palpitations',
+        ]);
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments.show', $appointment))
+            ->assertOk()
+            ->assertSee('Refer to another doctor')
+            ->assertSee('Choose a specialist')
+            ->assertSee('View profile')
+            ->assertSee('Dr Ananya Iyer')
+            ->assertSee('City Heart Clinic')
+            ->assertSee('Matches this visit')
+            ->assertSee('Chest pain')
+            ->assertDontSee('name="to_doctor_id"', false)
+            ->assertDontSee('No other approved doctors are available');
+    }
+
+    public function test_a_sample_referral_is_listed_after_it_is_sent(): void
+    {
+        [$doctorUser, $doctor] = $this->makeDoctor('Dr Maya Chen');
+        $patient = $this->makePatient('Amina Rahman');
+        $appointment = $this->appointment($patient, $doctor, [
+            'status' => 'confirmed',
+            'reason' => 'Chest pain and palpitations',
+        ]);
+        $recipient = collect(MockReferralDirectory::doctors())->firstWhere('name', 'Dr Ananya Iyer');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.referrals'))
+            ->assertOk()
+            ->assertSee('Meera Joshi')
+            ->assertSee('Dr Kabir Shah')
+            ->assertSee('Rahul Menon');
+
+        $response = $this->actingAs($doctorUser)
+            ->postJson(route('doctor.referrals.preview.store', $appointment), [
+                'to_doctor_id' => $recipient['id'],
+                'reason' => 'Please assess this chest pain.',
+                'clinical_question' => 'Is this angina?',
+                'urgency' => 'soon',
+            ])
+            ->assertOk()
+            ->assertJsonPath('referral.patient', 'Amina Rahman')
+            ->assertJsonPath('referral.name', 'Dr Ananya Iyer')
+            ->assertJsonPath('referral.status', 'Sent');
+
+        $id = $response->json('referral.id');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.referrals'))
+            ->assertOk()
+            ->assertSee('Amina Rahman')
+            ->assertSee('Dr Ananya Iyer')
+            ->assertSee('Please assess this chest pain.')
+            ->assertSee('Sent');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.referrals.preview', $id))
+            ->assertOk()
+            ->assertSee('Please assess this chest pain.')
+            ->assertSee('Is this angina?')
+            ->assertSee('Patient summary')
+            ->assertSee('for Chest pain and palpitations')
+            ->assertSee('Reports')
+            ->assertSee('No reports were attached to this referral.')
+            ->assertSee('Waiting for Dr Ananya Iyer');
     }
 
     /**

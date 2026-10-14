@@ -8,21 +8,22 @@
     Change both files together if the palette changes.
 */
 :root {
-    --color-primary: #1769FF;
-    --color-primary-hover: #0D57E5;
-    --color-navy: #0B1F3A;
-    --color-mint: #DDF8F1;
-    --color-mint-accent: #00A884;
-    --color-light: #EAF3FF;
-    --color-page: #F4F7FB;
+    --color-primary: #0067FF;
+    --color-primary-hover: #0052CC;
+    --color-navy: #181A1E;
+    --color-mint: #F0FDF4;
+    --color-mint-accent: #15803D;
+    --color-light: #E8F2FF;
+    --color-page: #F7FAFF;
     --color-surface: #FFFFFF;
-    --color-border: #E2EAF4;
-    --color-text: #53647D;
-    --color-muted: #7C8BA1;
-    --color-ink: #172337;
-    --color-success: #00A884;
-    --color-warning: #E99A17;
-    --color-danger: #DC3545;
+    --color-border: #E2E8F0;
+    --color-text: #4E545F;
+    --color-muted: #64748B;
+    --color-ink: #181A1E;
+    --color-success: #15803D;
+    --color-warning: #B45309;
+    --color-danger: #B91C1C;
+    --color-info: #1D4ED8;
 }
 
 @layer base {
@@ -58,7 +59,7 @@
     }
 
     .field {
-        @apply h-12 w-full rounded-xl border border-line bg-white px-4 text-[15px] text-ink shadow-sm outline-none transition placeholder:text-muted focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-page;
+        @apply h-10 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink shadow-none outline-none transition placeholder:text-muted focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-page;
     }
 
     textarea.field {
@@ -75,15 +76,15 @@
     .btn-ghost,
     .btn-danger,
     .btn-navy {
-        @apply inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-semibold no-underline transition focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60;
+        @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold no-underline transition focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60;
     }
 
     .btn-primary {
-        @apply bg-primary text-white shadow-[0_8px_20px_rgba(23,105,255,0.22)] hover:bg-primary-hover focus:ring-primary/20;
+        @apply bg-primary text-white shadow-none hover:bg-primary-hover focus:ring-primary/20;
     }
 
     .btn-secondary {
-        @apply border border-primary bg-white text-primary hover:bg-light focus:ring-primary/15;
+        @apply border border-line bg-white text-heading hover:bg-page focus:ring-primary/10;
     }
 
     .btn-ghost {
@@ -103,12 +104,12 @@
     }
 
     .card {
-        @apply rounded-[20px] border border-line bg-white p-6 shadow-card;
+        @apply rounded-xl border border-line bg-white p-5 shadow-card;
     }
 
     /* Older templates use surface for the same white panel, without forced padding. */
     .surface {
-        @apply rounded-[20px] border border-line bg-white shadow-card;
+        @apply rounded-xl border border-line bg-white shadow-card;
     }
 
     .badge,
@@ -120,11 +121,11 @@
     }
 
     .badge-success {
-        @apply bg-mint text-success;
+        @apply bg-[#F0FDF4] text-success;
     }
 
     .badge-warning {
-        @apply bg-[#fff4de] text-[#8a5a00];
+        @apply bg-[#FFFBEB] text-warning;
     }
 
     .badge-danger {
@@ -132,37 +133,298 @@
     }
 
     .badge-info {
-        @apply bg-light text-primary;
+        @apply bg-light text-info;
     }
 
     .dash-banner {
-        @apply relative overflow-hidden rounded-[24px] px-6 py-7 text-white sm:px-8 sm:py-8;
-        background:
-            radial-gradient(900px 220px at 100% -30%, rgba(255, 255, 255, 0.18), transparent 46%),
-            radial-gradient(420px 180px at 0% 120%, rgba(23, 105, 255, 0.55), transparent 60%),
-            linear-gradient(135deg, #0b1f3a 0%, #12325f 62%, #1d6dff 145%);
-        box-shadow: 0 18px 40px rgba(11, 31, 58, 0.16);
+        @apply relative overflow-hidden rounded-xl border border-line bg-white px-5 py-4 text-heading shadow-card;
     }
 
     .dash-chip {
-        @apply inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90;
+        @apply inline-flex items-center rounded-full border border-line bg-page px-2.5 py-1 text-xs font-semibold text-muted;
     }
 
     .dash-panel {
-        @apply overflow-hidden rounded-[20px] border border-line bg-white shadow-card;
+        @apply overflow-hidden rounded-xl border border-line bg-white shadow-card;
     }
 
     .dash-stat {
-        @apply rounded-[20px] border border-line bg-white p-5 shadow-card;
+        @apply rounded-xl border border-line bg-white p-4 shadow-card;
     }
 
     .dash-banner-btn {
-        @apply inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-primary no-underline transition hover:bg-light;
+        @apply inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white no-underline transition hover:bg-primary-hover;
     }
+
+    .metric {
+        @apply rounded-xl border border-line bg-white px-4 py-3.5 shadow-card;
+    }
+
+    .metric-label {
+        @apply text-[13px] font-medium text-muted;
+    }
+
+    .metric-value {
+        @apply mt-1 text-[28px] font-semibold leading-none tabular-nums tracking-tight;
+    }
+
+    .panel {
+        @apply overflow-hidden rounded-xl border border-line bg-white shadow-card;
+    }
+
+    .panel-head {
+        @apply flex items-center justify-between gap-3 border-b border-line px-4 py-3;
+    }
+
+    .quick-link {
+        @apply flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-3 text-sm font-semibold text-heading no-underline shadow-card transition hover:border-primary/40 hover:bg-[#F7FAFF];
+    }
+
+    .alert-success {
+        @apply mb-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-success;
+    }
+
+    .alert-error {
+        @apply mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger;
+    }
+
+    .data-table {
+        @apply w-full min-w-[720px] text-left text-sm;
+    }
+
+    .data-table thead {
+        @apply bg-[#F8FAFC] text-[12px] uppercase tracking-wide text-muted;
+    }
+
+    .data-table th {
+        @apply px-4 py-2.5 font-semibold;
+    }
+
+    .data-table td {
+        @apply px-4 py-3 align-middle;
+    }
+
+    .data-table tbody {
+        @apply divide-y divide-line;
+    }
+}
+
+.app-shell .dash-panel thead {
+    background: #F8FAFC;
+}
+
+.app-shell .dash-panel th {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748B;
+}
+
+/*
+    Older workspace pages still use a banner with light-on-dark utilities.
+    Force those banners into the compact white page header.
+*/
+.dash-banner,
+.dash-banner :is(h1, h2) {
+    color: #181A1E;
+}
+
+.dash-banner :is(p, a:not(.dash-banner-btn)) {
+    color: #4E545F;
+}
+
+.dash-banner :is(h1) {
+    font-size: 1.625rem;
+    line-height: 1.25;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+}
+
+.dash-banner .dash-banner-btn,
+.dash-banner .dash-banner-btn:hover {
+    color: #ffffff;
 }
 
 [x-cloak] {
     display: none !important;
+}
+
+/*
+    The forms plugin sets appearance:none on time inputs, which hides the
+    hour, minute, and AM/PM segments. Restore the native control so a saved
+    time stays fully visible.
+*/
+input.schedule-time {
+    appearance: auto;
+    -webkit-appearance: auto;
+    color-scheme: light;
+}
+
+input.schedule-time::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    margin-inline-start: 0.25rem;
+    opacity: 0.7;
+}
+
+input.schedule-time::-webkit-datetime-edit {
+    padding: 0;
+}
+
+/*
+    A chosen file input that is only clipped (sr-only) is stretched over the
+    page by Chrome. display:none keeps the picker off-screen; its label still opens it.
+*/
+input[type='file'].file-picker {
+    display: none !important;
+    position: static !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+}
+
+@media (min-width: 1024px) {
+    .sidebar-collapsed .dash-sidebar {
+        width: 4.5rem;
+    }
+
+    .sidebar-collapsed .sidebar-logo,
+    .sidebar-collapsed .sidebar-label,
+    .sidebar-collapsed .sidebar-heading,
+    .sidebar-collapsed .sidebar-dot,
+    .sidebar-collapsed .sidebar-help-chevron {
+        display: none;
+    }
+
+    .sidebar-collapsed .sidebar-brand {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .sidebar-collapsed .dash-nav {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .sidebar-collapsed .sidebar-link {
+        justify-content: center;
+        gap: 0;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .sidebar-collapsed .sidebar-help {
+        justify-content: center;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}
+
+.confirm-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: grid;
+    place-items: center;
+    padding: 1.25rem;
+}
+
+.confirm-dialog[hidden] {
+    display: none;
+}
+
+.confirm-dialog__backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(24, 26, 30, 0.46);
+    backdrop-filter: blur(3px);
+}
+
+.confirm-dialog__panel {
+    position: relative;
+    width: min(100%, 26rem);
+    border: 1px solid #e2e8f0;
+    border-radius: 1.25rem;
+    background: #fff;
+    padding: 1.5rem;
+    box-shadow: 0 24px 60px rgba(24, 26, 30, 0.18);
+    animation: confirm-dialog-in 160ms ease-out;
+}
+
+.confirm-dialog__panel:focus {
+    outline: none;
+}
+
+.confirm-dialog__icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: 1rem;
+    border-radius: 999px;
+    background: #e8f2ff;
+    color: #0067ff;
+}
+
+.confirm-dialog__icon svg {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+.confirm-dialog__icon[data-tone='danger'] {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.confirm-dialog__title {
+    margin: 0;
+    color: #181a1e;
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.confirm-dialog__message {
+    margin: 0.4rem 0 0;
+    color: #4e545f;
+    font-size: 0.925rem;
+    line-height: 1.5;
+}
+
+.confirm-dialog__detail {
+    margin: 1rem 0 0;
+    border-radius: 0.85rem;
+    background: #f7faff;
+    padding: 0.75rem 0.9rem;
+    color: #181a1e;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.confirm-dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+}
+
+body.confirm-open {
+    overflow: hidden;
+}
+
+@keyframes confirm-dialog-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -37,17 +37,7 @@
 @endphp
 
 @section('content')
-    <div class="dash-banner">
-        <p class="text-sm font-semibold uppercase tracking-wide text-white/80">Patient profile</p>
-        <h1 class="mt-2 text-3xl font-extrabold leading-tight">Edit your details</h1>
-        <p class="mt-3 max-w-2xl text-sm leading-6 text-white/80">
-            Keep your contact details and health notes current so bookings stay accurate.
-        </p>
-        <div class="mt-6 flex flex-wrap gap-2">
-            <span class="dash-chip">Settings</span>
-            <span class="dash-chip">{{ $email !== '' ? $email : 'Patient account' }}</span>
-        </div>
-    </div>
+    <x-ui.page-header title="Edit your details" description="Keep your contact details and health notes current so bookings stay accurate." />
 
     @if (session('status'))
         <p class="mt-6 rounded-2xl border border-[#b7ebc9] bg-[#e8f8ef] px-5 py-4 text-sm font-medium text-[#0f9f6e]">{{ session('status') }}</p>
@@ -57,15 +47,15 @@
         @csrf
         @method('PUT')
 
-        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-            <h2 class="text-xl font-bold text-[#0B1F3A]">Personal information</h2>
+        <section class="rounded-xl border border-line bg-white p-5 shadow-card">
+            <h2 class="text-base font-semibold text-heading">Personal information</h2>
             <p class="mt-1 text-sm leading-6 text-[#53647D]">Email stays as the login address and cannot be changed here.</p>
 
             <div class="mt-6 flex flex-wrap items-center gap-4">
                 <figure data-photo-preview class="{{ $photoUrl ? 'flex' : 'hidden' }} h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-[#1769FF]">
                     <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-full w-full object-cover">
                 </figure>
-                <div class="relative h-12 w-[140px]">
+                <div class="relative h-12 w-[140px] overflow-hidden">
                     <input type="file" name="photo" id="patient-photo" accept="image/*" class="absolute inset-0 cursor-pointer opacity-0">
                     <label for="patient-photo" class="flex h-full w-full cursor-pointer items-center justify-center rounded-xl bg-[#1769FF46] text-sm font-semibold text-[#0B1F3A]">
                         Upload photo
@@ -127,8 +117,8 @@
             </div>
         </section>
 
-        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-            <h2 class="text-xl font-bold text-[#0B1F3A]">Health notes</h2>
+        <section class="rounded-xl border border-line bg-white p-5 shadow-card">
+            <h2 class="text-base font-semibold text-heading">Health notes</h2>
             <p class="mt-1 text-sm leading-6 text-[#53647D]">Check “I don’t know” when you are unsure. Leave the value blank in that case.</p>
 
             <div class="mt-6 grid gap-5 lg:grid-cols-3">
@@ -175,25 +165,6 @@
                     @error('hyperthyroidism.value')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                     @enderror
-                </div>
-            </div>
-        </section>
-
-        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-            <h2 class="text-xl font-bold text-[#0B1F3A]">Password</h2>
-            <p class="mt-1 text-sm leading-6 text-[#53647D]">Leave both fields blank to keep your current password.</p>
-
-            <div class="mt-6 grid gap-5 sm:grid-cols-2">
-                <div>
-                    <label for="password" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">New password</label>
-                    <input id="password" type="password" name="password" autocomplete="new-password" placeholder="New password" class="{{ $inputClass }}">
-                    @error('password')
-                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                    @enderror
-                </div>
-                <div>
-                    <label for="password_confirmation" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">Confirm password</label>
-                    <input id="password_confirmation" type="password" name="password_confirmation" autocomplete="new-password" placeholder="Confirm password" class="{{ $inputClass }}">
                 </div>
             </div>
         </section>

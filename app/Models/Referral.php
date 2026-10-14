@@ -18,6 +18,10 @@ class Referral extends Model
         'summary_snapshot',
         'status',
         'responded_at',
+        'urgency',
+        'clinical_question',
+        'decline_reason',
+        'proposed_appointment_id',
     ];
 
     protected function casts(): array
@@ -57,5 +61,30 @@ class Referral extends Model
     {
         return $this->belongsToMany(AppointmentReport::class, 'referral_reports')
             ->withTimestamps();
+    }
+
+    public function proposedAppointment(): BelongsTo
+    {
+        return $this->belongsTo(Appointment::class, 'proposed_appointment_id');
+    }
+
+    public function statusLabel(): string
+    {
+        return match ($this->status) {
+            'sent' => 'Sent',
+            'accepted' => 'Accepted',
+            'declined' => 'Declined',
+            'appointment_booked' => 'Appointment booked',
+            default => ucfirst((string) $this->status),
+        };
+    }
+
+    public function urgencyLabel(): string
+    {
+        return match ($this->urgency) {
+            'soon' => 'Soon',
+            'urgent' => 'Urgent',
+            default => 'Routine',
+        };
     }
 }

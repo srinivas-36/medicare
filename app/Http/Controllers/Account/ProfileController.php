@@ -11,6 +11,7 @@ use App\Support\ProfileViewData;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -72,10 +73,6 @@ class ProfileController extends Controller
 
                 if ($newPhoto) {
                     $user->photo = $newPhoto;
-                }
-
-                if (! empty($data['password'])) {
-                    $user->password = $data['password'];
                 }
 
                 $user->save();
@@ -147,6 +144,8 @@ class ProfileController extends Controller
                     'ticket_price' => $data['ticketPrice'],
                     'bio' => $data['bio'] ?? null,
                     'about' => $data['about'] ?? null,
+                    'appointment_duration' => (int) ($data['appointmentDuration'] ?? $doctor->appointment_duration ?? 30),
+                    'appointment_buffer' => (int) ($data['appointmentBuffer'] ?? $doctor->appointment_buffer ?? 0),
                 ]);
 
                 $doctor->qualifications()->delete();
@@ -198,5 +197,57 @@ class ProfileController extends Controller
         return redirect()
             ->route('doctor.profile.show')
             ->with('status', 'Profile saved.');
+    }
+
+    public function showReceptionist(Request $request): View
+    {
+        abort_unless($request->user()->role === 'receptionist', 403);
+
+        return view('dashboard.receptionist.show', [
+            'receptionist' => $request->user(),
+        ]);
+    }
+
+    public function editReceptionist(Request $request): View
+    {
+        abort_unless($request->user()->role === 'receptionist', 403);
+
+        return view('dashboard.receptionist.edit', [
+            'receptionist' => $request->user(),
+        ]);
+    }
+
+    public function updateReceptionist(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless($user->role === 'receptionist', 403);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
+            'photo' => ['nullable', 'image', 'max:2048'],
+        ]);
+
+        $newPhoto = ProfilePhoto::store($request->file('photo'), 'receptionist');
+        $previous = $user->photo;
+
+        $user->fill([
+            'name' => $data['name'],
+            'phone' => $data['phone'] ?? null,
+            'gender' => $data['gender'] ?? null,
+        ]);
+
+        if ($newPhoto) {
+            $user->photo = $newPhoto;
+        }
+
+        $user->save();
+
+        if ($newPhoto) {
+            ProfilePhoto::delete($previous);
+        }
+
+        return redirect()->route('receptionist.profile')->with('status', 'Profile saved.');
     }
 }

@@ -9,6 +9,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -19,7 +21,14 @@ class GenerateClinicalAnalysis implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(public int $consultationId) {}
+    public int $timeout = 150;
+
+    public int $tries = 1;
+
+    public function __construct(public int $consultationId)
+    {
+        $this->afterCommit = true;
+    }
 
     public function handle(ClinicalAnalysis $analysis): void
     {
@@ -40,7 +49,12 @@ class GenerateClinicalAnalysis implements ShouldQueue
 
         try {
             $result = $analysis->analyze($consultation);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            Log::warning('Clinical analysis failed.', [
+                'consultation_id' => $consultation->id,
+                'message' => Str::limit($exception->getMessage(), 300),
+            ]);
+
             $consultation->forceFill([
                 'ai_status' => 'failed',
             ])->save();

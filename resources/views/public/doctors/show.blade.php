@@ -2,6 +2,15 @@
 
 @section('title', data_get($doctor ?? null, 'name', 'Doctor'))
 
+@php
+    $openFeedbackOnLoad = $errors->has('rating')
+        || $errors->has('reviewText')
+        || in_array(session('status'), [
+            'Your review is on this profile.',
+            'Your review was updated.',
+        ], true);
+@endphp
+
 @section('content')
     <section class="py-10 lg:py-16">
         <div class="mx-auto max-w-[1170px] px-5">
@@ -14,8 +23,8 @@
                 <a href="{{ route('doctors.index') }}" class="mb-6 inline-flex text-sm font-semibold text-primary no-underline hover:text-[#0D57E5]">← All doctors</a>
 
                 <div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-                    <div>
-                        <x-doctors.profile :doctor="$doctor" />
+                    <div x-data="doctorReviews(@js($reviewState))">
+                        <x-doctors.profile :doctor="$doctor" live />
 
                         <div class="mt-8 flex gap-2" role="tablist">
                             <button type="button" data-doctor-tab="about" class="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white" role="tab">
@@ -23,6 +32,7 @@
                             </button>
                             <button type="button" data-doctor-tab="feedback" class="rounded-full bg-white px-5 py-2 text-sm font-semibold text-heading ring-1 ring-[#E2EAF4]" role="tab">
                                 Feedback
+                                <span x-show="total > 0" x-cloak x-text="'(' + total + ')'"></span>
                             </button>
                         </div>
 
@@ -31,7 +41,7 @@
                         </div>
 
                         <div class="mt-8 hidden" data-doctor-panel="feedback">
-                            <x-doctors.feedback :doctor="$doctor" />
+                            <x-doctors.feedback :state="$reviewState" />
                         </div>
                     </div>
 
@@ -64,6 +74,15 @@
                     });
                 });
             });
+
+            const feedbackQuery = new URLSearchParams(window.location.search).has('feedback');
+            const openFeedback = feedbackQuery
+                || window.location.hash === '#feedback'
+                || @json($openFeedbackOnLoad);
+
+            if (openFeedback) {
+                document.querySelector('[data-doctor-tab="feedback"]')?.click();
+            }
         </script>
     @endpush
 @endonce

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Doctor;
+use App\Support\DoctorReviews;
 use Illuminate\Http\Request;
 
 class DoctorController extends Controller
@@ -44,6 +45,13 @@ class DoctorController extends Controller
             })
             ->firstOrFail();
 
-        return view('public.doctors.show', compact('doctor'));
+        return view('public.doctors.show', [
+            'doctor' => $doctor,
+            'reviewState' => DoctorReviews::page(
+                $doctor,
+                request()->user(),
+                max(1, (int) request()->query('reviews_page', 1)),
+            ),
+        ]);
     }
 }

@@ -21,6 +21,8 @@ class UpdateConsultationRequest extends FormRequest
             'clinical_notes' => ['nullable', 'string', 'max:20000'],
             'diagnosis' => ['nullable', 'string', 'max:255'],
             'plan' => ['nullable', 'string', 'max:20000'],
+            'follow_up_instructions' => ['nullable', 'string', 'max:20000'],
+            'follow_up_on' => ['nullable', 'date'],
         ];
     }
 }

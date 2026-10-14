@@ -30,11 +30,23 @@ class UpdateDoctorProfileRequest extends FormRequest
             $this->merge(['gender' => null]);
         }
 
-        $this->merge([
+        $settings = [
             'qualifications' => $this->filledRows($this->input('qualifications'), ['degree', 'university', 'startingDate', 'endingDate']),
             'experiences' => $this->filledRows($this->input('experiences'), ['position', 'hospital', 'startingDate', 'endingDate']),
             'timeSlots' => $this->filledRows($this->input('timeSlots'), ['day', 'startingTime', 'endingTime']),
-        ]);
+        ];
+
+        foreach (['appointmentDuration', 'appointmentBuffer'] as $field) {
+            $value = $this->input($field);
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $settings[$field] = (int) $value;
+        }
+
+        $this->merge($settings);
     }
 
     /**
@@ -44,11 +56,11 @@ class UpdateDoctorProfileRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'regex:/^[0-9]{10}$/'],
             'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
             'photo' => ['nullable', 'image', 'max:2048'],
             'specialization' => ['nullable', 'string', 'max:255'],
-            'ticketPrice' => ['required', 'numeric', 'min:0'],
+            'ticketPrice' => ['required', 'regex:/^[0-9]+(\.[0-9]{1,2})?$/', 'numeric', 'min:0'],
             'bio' => ['nullable', 'string', 'max:1000'],
             'about' => ['nullable', 'string', 'max:5000'],
             'qualifications' => ['array'],
@@ -66,6 +78,8 @@ class UpdateDoctorProfileRequest extends FormRequest
             'timeSlots.*.startingTime' => ['required', 'date_format:H:i'],
             'timeSlots.*.endingTime' => ['required', 'date_format:H:i'],
             'timeSlots.*.isAvailable' => ['nullable', 'boolean'],
+            'appointmentDuration' => ['nullable', 'integer', Rule::in([15, 20, 30, 45, 60, 90])],
+            'appointmentBuffer' => ['nullable', 'integer', Rule::in([0, 5, 10, 15, 20, 30])],
         ];
     }
 
@@ -82,6 +96,39 @@ class UpdateDoctorProfileRequest extends FormRequest
 
                 if ($start >= $end) {
                     $validator->errors()->add("timeSlots.$index.endingTime", 'The ending time must be after the starting time.');
+                }
+            }
+
+            $byDay = [];
+
+            foreach ($this->input('timeSlots', []) as $index => $slot) {
+                $start = $slot['startingTime'] ?? null;
+                $end = $slot['endingTime'] ?? null;
+                $day = strtolower((string) ($slot['day'] ?? ''));
+
+                if (! is_string($start) || ! is_string($end) || $start === '' || $end === '' || $start >= $end || $day === '') {
+                    continue;
+                }
+
+                $byDay[$day][] = [
+                    'index' => $index,
+                    'start' => $start,
+                    'end' => $end,
+                ];
+            }
+
+            foreach ($byDay as $ranges) {
+                usort($ranges, fn (array $a, array $b) => strcmp($a['start'], $b['start']));
+                $previousEnd = null;
+
+                foreach ($ranges as $range) {
+                    if ($previousEnd !== null && $range['start'] < $previousEnd) {
+                        $validator->errors()->add("timeSlots.{$range['index']}.startingTime", 'This range overlaps another range on the same day.');
+                    }
+
+                    if ($previousEnd === null || $range['end'] > $previousEnd) {
+                        $previousEnd = $range['end'];
+                    }
                 }
             }
 

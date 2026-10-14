@@ -6,8 +6,8 @@
 --}}
 @props(['title', 'text' => null])
 
-<div {{ $attributes->merge(['class' => 'card mx-auto max-w-xl px-6 py-12 text-center']) }}>
-    <h2 class="text-2xl font-bold text-heading">{{ $title }}</h2>
+<div {{ $attributes->merge(['class' => 'card mx-auto max-w-xl px-5 py-8 text-center']) }}>
+    <h2 class="text-base font-semibold text-heading">{{ $title }}</h2>
     @if ($text)
         <p class="mt-2 text-sm leading-6 text-text">{{ $text }}</p>
     @endif

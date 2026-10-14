@@ -9,6 +9,7 @@ use App\Models\PatientProfile;
 use App\Models\TimeSlot;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -79,8 +80,14 @@ class AppointmentPagesTest extends TestCase
         $this->actingAs($doctorUser)
             ->get(route('doctor.appointments', $filters))
             ->assertOk()
-            ->assertSee('Your appointments')
-            ->assertSee('1 appointment')
+            ->assertSee('Manage your patient visits and schedule.')
+            ->assertSee('Upcoming')
+            ->assertSee('Clear date')
+            ->assertDontSee('Time slot')
+            ->assertDontSee('Patient name')
+            ->assertDontSee('name="slot"', false)
+            ->assertSee('Search patient', false)
+            ->assertSee('Showing 1 to 1 of 1 results')
             ->assertSee('Amina Rahman')
             ->assertSee('12 Oct 2026')
             ->assertSee('Mon, 9:00 AM')
@@ -95,7 +102,7 @@ class AppointmentPagesTest extends TestCase
         $this->actingAs($doctorUser)
             ->get(route('doctor.appointments', ['date' => '2026-11-01']))
             ->assertOk()
-            ->assertSee('No appointments match these filters.')
+            ->assertSee('No appointments found for the selected filters.')
             ->assertDontSee('You do not have any appointments yet.');
 
         $this->actingAs($doctorUser)
@@ -116,7 +123,8 @@ class AppointmentPagesTest extends TestCase
             ->assertSee('Morning headache')
             ->assertSee('No reports were attached to this booking.')
             ->assertSee('No notes from the doctor yet.')
-            ->assertSee('AI analysis is not available for this booking yet.')
+            ->assertSee('Not started')
+            ->assertSee('AI Analysis')
             ->assertSee('date=2026-10-12', false)
             ->assertSee('startingTime=09%3A00', false)
             ->assertSee('endingTime=12%3A00', false)
@@ -167,11 +175,83 @@ class AppointmentPagesTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_doctor_status_tabs_filter_upcoming_completed_and_cancelled_visits(): void
+    {
+        Carbon::setTestNow('2026-10-13 08:00:00');
+
+        [$doctorUser, $doctor] = $this->makeDoctor('Dr Maya Chen');
+        $patient = $this->makePatient('Amina Rahman');
+
+        $this->appointment($patient, $doctor, [
+            'appointment_date' => '2026-10-14',
+            'appointment_time' => '09:00:00',
+            'ending_time' => '09:30:00',
+            'status' => 'confirmed',
+            'reason' => 'Future visit',
+        ]);
+        $this->appointment($patient, $doctor, [
+            'appointment_date' => '2026-10-13',
+            'appointment_time' => '07:00:00',
+            'ending_time' => '07:30:00',
+            'status' => 'pending',
+            'reason' => 'Earlier today',
+        ]);
+        $this->appointment($patient, $doctor, [
+            'appointment_date' => '2026-10-15',
+            'appointment_time' => '11:00:00',
+            'ending_time' => '11:30:00',
+            'status' => 'no_show',
+            'reason' => 'Missed visit',
+        ]);
+        $this->appointment($patient, $doctor, [
+            'appointment_date' => '2026-10-12',
+            'status' => 'completed',
+            'reason' => 'Finished visit',
+        ]);
+        $this->appointment($patient, $doctor, [
+            'appointment_date' => '2026-10-11',
+            'status' => 'cancelled',
+            'reason' => 'Called off visit',
+        ]);
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments', ['tab' => 'upcoming', 'date' => '2026-10-14']))
+            ->assertOk()
+            ->assertSee('Future visit')
+            ->assertSee('tab=completed', false)
+            ->assertSee('date=2026-10-14', false)
+            ->assertSee('aria-selected="true"', false)
+            ->assertDontSee('Earlier today')
+            ->assertDontSee('Missed visit')
+            ->assertDontSee('Finished visit')
+            ->assertDontSee('Called off visit');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments', ['tab' => 'completed']))
+            ->assertOk()
+            ->assertSee('Finished visit')
+            ->assertDontSee('Future visit')
+            ->assertDontSee('Called off visit');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments', ['tab' => 'cancelled']))
+            ->assertOk()
+            ->assertSee('Called off visit')
+            ->assertDontSee('Future visit')
+            ->assertDontSee('Finished visit');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments', ['tab' => 'not-a-tab']))
+            ->assertRedirect(route('doctor.appointments'));
+
+        Carbon::setTestNow();
+    }
+
     public function test_lists_page_ten_rows_and_an_empty_account_has_its_own_message(): void
     {
         [$doctorUser, $doctor] = $this->makeDoctor('Dr Maya Chen');
 
-        for ($number = 1; $number <= 11; $number++) {
+        for ($number = 1; $number <= 16; $number++) {
             $this->appointment($this->makePatient(sprintf('Listed %02d', $number)), $doctor, [
                 'appointment_date' => sprintf('2026-10-%02d', $number),
                 'appointment_time' => '09:00:00',
@@ -182,17 +262,18 @@ class AppointmentPagesTest extends TestCase
         $this->actingAs($doctorUser)
             ->get(route('doctor.appointments'))
             ->assertOk()
-            ->assertSee('11 appointments')
-            ->assertSee('Listed 11')
+            ->assertSee('Showing 1 to 15 of 16 results')
+            ->assertSee('Listed 16')
             ->assertSee('Previous')
             ->assertSee('Next')
-            ->assertDontSee('Listed 01');
+            ->assertDontSee('Listed 01')
+            ->assertDontSee('All (');
 
         $this->actingAs($doctorUser)
             ->get(route('doctor.appointments', ['page' => 2]))
             ->assertOk()
             ->assertSee('Listed 01')
-            ->assertDontSee('Listed 11');
+            ->assertDontSee('Listed 16');
 
         $emptyDoctor = $this->makeDoctor('Dr Nia Cole')[0];
 
@@ -235,6 +316,18 @@ class AppointmentPagesTest extends TestCase
                     'reportUrls' => ['https://reports.example/cbc.pdf'],
                     'analysis' => 'The attached file name is cbc.pdf.',
                     'warnings' => ['File contents were not read.'],
+                    'findings' => [[
+                        'name' => 'Hemoglobin',
+                        'value' => '14.2',
+                        'unit' => 'g/dL',
+                        'range' => '13-17',
+                        'flag' => 'normal',
+                    ]],
+                ], [
+                    'groupName' => 'Blood Test Reports',
+                    'analysis' => '',
+                    'warnings' => [],
+                    'findings' => [],
                 ]],
                 'doctorRecommendations' => ['Review the blood pressure.', 'Repeat the visit in two weeks.'],
             ],
@@ -245,12 +338,24 @@ class AppointmentPagesTest extends TestCase
             ->assertOk()
             ->assertSee('Throbbing headache since Monday.')
             ->assertSee('Paid')
-            ->assertSee('Patient overview')
+            ->assertSee('Patient Information')
+            ->assertSee('AI Analysis')
+            ->assertSee('Earlier brief')
+            ->assertDontSee('Reports suggest a tension pattern.')
+            ->assertDontSee('This older summary should stay out of the card.');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments.analysis', $appointment))
+            ->assertOk()
             ->assertSee('Reports suggest a tension pattern.')
             ->assertSee('Blood Test Reports')
             ->assertSee('https://reports.example/cbc.pdf')
             ->assertSee('File contents were not read.')
             ->assertSee('The attached file name is cbc.pdf.')
+            ->assertSee('Hemoglobin')
+            ->assertSee('14.2 g/dL')
+            ->assertSee('13-17')
+            ->assertSee('Normal')
             ->assertSee('Review the blood pressure.')
             ->assertSee('Repeat the visit in two weeks.')
             ->assertDontSee('This older summary should stay out of the card.');
@@ -259,8 +364,9 @@ class AppointmentPagesTest extends TestCase
             ->get(route('patient.bookings.show', $appointment))
             ->assertOk()
             ->assertSee('Throbbing headache since Monday.')
-            ->assertSee('Reports suggest a tension pattern.')
-            ->assertSee('Review the blood pressure.')
+            ->assertDontSee('AI Analysis')
+            ->assertDontSee('Reports suggest a tension pattern.')
+            ->assertDontSee('Review the blood pressure.')
             ->assertDontSee('Health notes');
     }
 

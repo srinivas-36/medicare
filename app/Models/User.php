@@ -82,9 +82,19 @@ class User extends Authenticatable
         return $this->hasOne(Doctor::class);
     }
 
+    public function receptionist(): HasOne
+    {
+        return $this->hasOne(Receptionist::class);
+    }
+
     public function patient_profile(): HasOne
     {
         return $this->hasOne(PatientProfile::class);
+    }
+
+    public function doctorReviews(): HasMany
+    {
+        return $this->hasMany(DoctorReview::class);
     }
 
     public function appointmentsAsPatient(): HasMany

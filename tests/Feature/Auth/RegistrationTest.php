@@ -26,10 +26,10 @@ class RegistrationTest extends TestCase
         $response = $this->post('/register', [
             'name' => 'Test User',
             'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'Password1',
+            'password_confirmation' => 'Password1',
             'phone' => '1234567890',
-            'age' => 30,
+            'age' => '30',
             'role' => 'patient',
             'gender' => 'male',
             'photo' => UploadedFile::fake()->image('face.jpg'),
@@ -59,10 +59,10 @@ class RegistrationTest extends TestCase
         $this->post('/register', [
             'name' => 'Dr Test',
             'email' => 'doctor@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'Password1',
+            'password_confirmation' => 'Password1',
             'phone' => '1234567890',
-            'age' => 40,
+            'age' => '40',
             'role' => 'doctor',
             'gender' => 'female',
         ]);
@@ -85,10 +85,10 @@ class RegistrationTest extends TestCase
         $this->post('/register', [
             'name' => 'Admin User',
             'email' => 'admin@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'Password1',
+            'password_confirmation' => 'Password1',
             'phone' => '1234567890',
-            'age' => 40,
+            'age' => '40',
             'role' => 'admin',
             'gender' => 'male',
         ])->assertSessionHasErrors('role');
@@ -97,5 +97,21 @@ class RegistrationTest extends TestCase
         $this->assertDatabaseMissing('users', [
             'email' => 'admin@example.com',
         ]);
+    }
+
+    public function test_registration_rejects_invalid_fields(): void
+    {
+        $this->post('/register', [
+            'name' => '123',
+            'email' => 'not-an-email',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'phone' => '12ab',
+            'age' => 'two',
+            'role' => '',
+            'gender' => '',
+        ])->assertSessionHasErrors(['name', 'email', 'password', 'phone', 'age', 'role', 'gender']);
+
+        $this->assertGuest();
     }
 }

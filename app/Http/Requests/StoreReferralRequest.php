@@ -52,6 +52,10 @@ class StoreReferralRequest extends FormRequest
                 },
             ],
             'reason' => ['required', 'string', 'max:5000'],
+            'clinical_question' => ['nullable', 'string', 'max:5000'],
+            'urgency' => ['nullable', Rule::in(['routine', 'soon', 'urgent'])],
+            'report_ids' => ['nullable', 'array'],
+            'report_ids.*' => ['integer'],
         ];
     }
 }

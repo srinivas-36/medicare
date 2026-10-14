@@ -26,19 +26,7 @@
 @endphp
 
 @section('content')
-    <div class="dash-banner">
-        <p class="text-sm font-semibold uppercase tracking-wide text-white/80">Receptionist profile</p>
-        <h1 class="mt-2 text-3xl font-extrabold leading-tight">Edit your details</h1>
-        <p class="mt-3 max-w-2xl text-sm leading-6 text-white/80">
-            Update the name, phone, and note that appear on your reception account.
-        </p>
-        <div class="mt-6 flex flex-wrap gap-2">
-            <span class="dash-chip">Account settings</span>
-            @if ($email !== '')
-                <span class="dash-chip">{{ $email }}</span>
-            @endif
-        </div>
-    </div>
+    <x-ui.page-header title="Edit your details" description="Update the name, phone, and note that appear on your reception account." />
 
     @if (session('status'))
         <p class="mt-6 rounded-2xl border border-[#b7ebc9] bg-[#e8f8ef] px-5 py-4 text-sm font-medium text-[#0f9f6e]">{{ session('status') }}</p>
@@ -48,15 +36,15 @@
         @csrf
         @method('PUT')
 
-        <section class="rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-            <h2 class="text-xl font-bold text-[#0B1F3A]">Personal information</h2>
+        <section class="rounded-xl border border-line bg-white p-5 shadow-card">
+            <h2 class="text-base font-semibold text-heading">Personal information</h2>
             <p class="mt-1 text-sm leading-6 text-[#53647D]">Email stays as the login address and cannot be changed here.</p>
 
             <div class="mt-6 flex flex-wrap items-center gap-4">
                 <figure data-photo-preview class="{{ $photoUrl ? 'flex' : 'hidden' }} h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-[#1769FF]">
                     <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-full w-full object-cover">
                 </figure>
-                <div class="relative h-12 w-[140px]">
+                <div class="relative h-12 w-[140px] overflow-hidden">
                     <input type="file" name="photo" id="receptionist-photo" accept="image/*" class="absolute inset-0 cursor-pointer opacity-0">
                     <label for="receptionist-photo" class="flex h-full w-full cursor-pointer items-center justify-center rounded-xl bg-[#1769FF46] text-sm font-semibold text-[#0B1F3A]">
                         Upload photo
@@ -103,13 +91,7 @@
                 </div>
             </div>
 
-            <div class="mt-5">
-                <label for="about" class="mb-2 block text-sm font-semibold text-[#0B1F3A]">About</label>
-                <textarea id="about" name="about" rows="5" placeholder="A short note about your role at the desk." class="w-full resize-y rounded-xl border border-[#E2EAF4] bg-[#F4F7FB] px-4 py-3 text-base leading-7 text-[#0B1F3A] placeholder:text-[#53647D] focus:border-[#1769FF] focus:outline-none focus:ring-2 focus:ring-[#1769FF]/20">{{ $about }}</textarea>
-                @error('about')
-                    <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
+           
         </section>
 
         <div class="flex flex-wrap items-center justify-end gap-3">

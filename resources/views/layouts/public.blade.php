@@ -18,7 +18,9 @@
         @yield('content')
     </main>
 
-    @include('partials.footer')
+    @if (trim($__env->yieldContent('hide-footer')) === '')
+        @include('partials.footer')
+    @endif
     @stack('scripts')
 </body>
 </html>

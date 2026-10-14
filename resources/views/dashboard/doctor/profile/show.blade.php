@@ -58,14 +58,31 @@ return false;
 $qualifications = $hasValue(data_get($doctor, 'qualifications', []), ['degree', 'university', 'startingDate', 'endingDate']);
 $experiences = $hasValue(data_get($doctor, 'experiences', []), ['position', 'hospital', 'startingDate', 'endingDate']);
 
-$dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-$timeSlots = $hasValue(data_get($doctor, 'timeSlots', []), ['day', 'startingTime', 'endingTime'])
-->sortBy(function ($slot) use ($dayOrder) {
-$index = array_search(strtolower((string) data_get($slot, 'day')), $dayOrder, true);
+$dayOrder = [
+'monday' => 'Monday',
+'tuesday' => 'Tuesday',
+'wednesday' => 'Wednesday',
+'thursday' => 'Thursday',
+'friday' => 'Friday',
+'saturday' => 'Saturday',
+'sunday' => 'Sunday',
+];
+$formatClock = function ($value) {
+if (! is_string($value) || ! preg_match('/^(\d{2}):(\d{2})/', $value, $matches)) {
+return $value ?: '—';
+}
 
-return $index === false ? 99 : $index;
-})
-->values();
+$hour = (int) $matches[1];
+$suffix = $hour >= 12 ? 'PM' : 'AM';
+$hour12 = $hour % 12 ?: 12;
+
+return sprintf('%02d:%02d %s', $hour12, (int) $matches[2], $suffix);
+};
+$timeSlots = $hasValue(data_get($doctor, 'timeSlots', []), ['day', 'startingTime', 'endingTime'])
+->filter(fn ($slot) => filter_var(data_get($slot, 'isAvailable', true), FILTER_VALIDATE_BOOLEAN))
+->groupBy(fn ($slot) => strtolower((string) data_get($slot, 'day')));
+$appointmentDuration = (int) data_get($doctor, 'appointmentDuration', 30);
+$appointmentBuffer = (int) data_get($doctor, 'appointmentBuffer', 0);
 
 $dateLabel = function ($value) {
 if (! is_string($value) || trim($value) === '') {
@@ -87,29 +104,25 @@ $editUrl = \Illuminate\Support\Facades\Route::has('doctor.profile.edit')
 @endphp
 
 @section('content')
-<section class="dash-banner">
-    <div class="flex flex-wrap items-end justify-between gap-5">
-        <div class="max-w-2xl">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Doctor profile</p>
-            <h1 class="mt-2 text-3xl font-bold tracking-tight">{{ $name }}</h1>
-            <p class="mt-3 text-sm leading-6 text-white/80">
-                This is the profile patients see before they book.
-            </p>
+<header class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div class="flex min-w-0 items-center gap-4">
+        @if ($photoUrl)
+        <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-16 w-16 rounded-full border-2 border-[#0067FF] object-cover">
+        @else
+        <span class="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#0067FF] bg-[#E8F2FF] text-lg font-bold text-[#0067FF]">
+            {{ $initials !== '' ? $initials : 'D' }}
+        </span>
+        @endif
+        <div class="min-w-0">
+            <h1 class="truncate text-xl font-semibold tracking-tight text-[#181A1E] sm:text-[22px]">{{ $name }}</h1>
+            <p class="mt-0.5 text-sm text-[#64748B]">{{ $specialization !== '' ? ucfirst($specialization) : 'Specialization not set' }}</p>
+            @if ($approvalLabel)
+            <span class="mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $approvalClass }}">{{ $approvalLabel }}</span>
+            @endif
         </div>
-        <a href="{{ $editUrl }}" class="dash-banner-btn">Edit profile</a>
     </div>
-    <div class="mt-6 flex flex-wrap gap-2">
-        @if ($specialization)
-            <span class="dash-chip">{{ $specialization }}</span>
-        @endif
-        @if ($approvalLabel)
-            <span class="dash-chip">{{ $approvalLabel }}</span>
-        @endif
-        @if ($priceLabel)
-            <span class="dash-chip">{{ $priceLabel }} consultation</span>
-        @endif
-    </div>
-</section>
+    <a href="{{ $editUrl }}" class="btn-primary">Edit profile</a>
+</header>
 
 @if (session('status'))
 <p class="mt-6 rounded-2xl border border-[#b7ebc9] bg-[#e8f8ef] px-5 py-4 text-sm font-medium text-[#0f9f6e]">{{ session('status') }}</p>
@@ -121,54 +134,28 @@ $editUrl = \Illuminate\Support\Facades\Route::has('doctor.profile.edit')
 </div>
 @endif
 
-<section class="mt-6 rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-xl font-bold text-[#0B1F3A]">Personal information</h2>
-        @if ($approvalLabel)
-        <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $approvalClass }}">{{ $approvalLabel }}</span>
-        @endif
-    </div>
-
-    <div class="mt-6 flex flex-wrap items-center gap-4">
-        @if ($photoUrl)
-        <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-20 w-20 rounded-full border-2 border-[#1769FF] object-cover">
-        @else
-        <span class="flex h-20 w-20 items-center justify-center rounded-full border-2 border-[#1769FF] bg-[#EAF3FF] text-xl font-bold text-[#1769FF]">
-            {{ $initials !== '' ? $initials : 'D' }}
-        </span>
-        @endif
-        <div>
-            <p class="text-lg font-bold text-[#0B1F3A]">{{ $name }}</p>
-            <p class="text-sm text-[#53647D]">{{ $specialization !== '' ? ucfirst($specialization) : 'Specialization not set' }}</p>
-        </div>
-    </div>
-
-    <div class="mt-6 grid gap-5 sm:grid-cols-2">
-        @include('dashboard.partials.detail', ['label' => 'Full name', 'value' => $name])
-        @include('dashboard.partials.detail', ['label' => 'Email', 'value' => $email])
-        @include('dashboard.partials.detail', ['label' => 'Phone', 'value' => $phone])
-        @include('dashboard.partials.detail', ['label' => 'Gender', 'value' => $gender !== '' ? ucfirst($gender) : null])
-        @include('dashboard.partials.detail', ['label' => 'Specialization', 'value' => $specialization !== '' ? ucfirst($specialization) : null])
-        @include('dashboard.partials.detail', ['label' => 'Ticket price', 'value' => $priceLabel])
-    </div>
+<section class="mt-4 grid gap-3 sm:grid-cols-3">
+    <article class="rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 shadow-card">
+        <p class="text-[13px] text-[#64748B]">Email</p>
+        <p class="mt-1 truncate text-sm font-semibold text-[#181A1E]">{{ $email !== '' ? $email : 'Not provided' }}</p>
+    </article>
+    <article class="rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 shadow-card">
+        <p class="text-[13px] text-[#64748B]">Phone</p>
+        <p class="mt-1 truncate text-sm font-semibold text-[#181A1E]">{{ $phone !== '' ? $phone : 'Not provided' }}</p>
+    </article>
+    <article class="rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 shadow-card">
+        <p class="text-[13px] text-[#64748B]">Consultation Fee</p>
+        <p class="mt-1 truncate text-sm font-semibold text-[#181A1E]">{{ $priceLabel ?: 'Not provided' }}</p>
+    </article>
 </section>
 
-<section class="mt-6 rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-    <h2 class="text-xl font-bold text-[#0B1F3A]">About</h2>
-    <div class="mt-5 space-y-5">
-        <div>
-            <p class="text-sm text-[#53647D]">Short bio</p>
-            <p class="mt-1 leading-7 text-[#0B1F3A]">{{ $bio !== '' ? $bio : 'Not provided' }}</p>
-        </div>
-        <div>
-            <p class="text-sm text-[#53647D]">About</p>
-            <p class="mt-1 whitespace-pre-wrap leading-7 text-[#0B1F3A]">{{ $about !== '' ? $about : 'Not provided' }}</p>
-        </div>
-    </div>
+<section class="mt-4 rounded-xl border border-line bg-white p-5 shadow-card">
+    <h2 class="text-base font-semibold text-heading">About</h2>
+    <p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-[#181A1E]">{{ $about !== '' ? $about : ($bio !== '' ? $bio : 'Not provided') }}</p>
 </section>
 
-<section class="mt-6 rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-    <h2 class="text-xl font-bold text-[#0B1F3A]">Qualifications</h2>
+<section class="mt-6 rounded-xl border border-line bg-white p-5 shadow-card">
+    <h2 class="text-base font-semibold text-heading">Qualifications</h2>
     @if ($qualifications->isEmpty())
     <p class="mt-4 text-sm leading-6 text-[#53647D]">No qualifications added yet.</p>
     @else
@@ -187,8 +174,8 @@ $editUrl = \Illuminate\Support\Facades\Route::has('doctor.profile.edit')
     @endif
 </section>
 
-<section class="mt-6 rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-    <h2 class="text-xl font-bold text-[#0B1F3A]">Experience</h2>
+<section class="mt-6 rounded-xl border border-line bg-white p-5 shadow-card">
+    <h2 class="text-base font-semibold text-heading">Experience</h2>
     @if ($experiences->isEmpty())
     <p class="mt-4 text-sm leading-6 text-[#53647D]">No experience added yet.</p>
     @else
@@ -207,25 +194,28 @@ $editUrl = \Illuminate\Support\Facades\Route::has('doctor.profile.edit')
     @endif
 </section>
 
-<section class="mt-6 rounded-2xl border border-[#E2EAF4] bg-white p-6 shadow-[0_12px_40px_rgba(0,103,255,0.08)] sm:p-8">
-    <h2 class="text-xl font-bold text-[#0B1F3A]">Time slots</h2>
+<section class="mt-6 rounded-xl border border-line bg-white p-5 shadow-card">
+    <h2 class="text-base font-semibold text-heading">Weekly schedule</h2>
+    <p class="mt-1 text-sm leading-6 text-[#53647D]">{{ $appointmentDuration }} minute appointments, {{ $appointmentBuffer }} minute buffer.</p>
     @if ($timeSlots->isEmpty())
-    <p class="mt-4 text-sm leading-6 text-[#53647D]">No time slots added yet.</p>
+    <p class="mt-4 text-sm leading-6 text-[#53647D]">No working hours added yet.</p>
     @else
-    <div class="mt-5 grid gap-4 sm:grid-cols-2">
-        @foreach ($timeSlots as $slot)
-        @php
-        $open = filter_var(data_get($slot, 'isAvailable', true), FILTER_VALIDATE_BOOLEAN);
-        @endphp
-        <article class="rounded-xl border px-4 py-3 {{ $open ? 'border-[#b7ebc9] bg-[#e8f8ef]' : 'border-[#E2EAF4] bg-[#F4F7FB]' }}">
-            <p class="font-semibold capitalize {{ $open ? 'text-[#0f9f6e]' : 'text-[#0B1F3A]' }}">{{ data_get($slot, 'day') ?: 'Day not set' }}</p>
-            <p class="mt-1 text-sm {{ $open ? 'text-[#0f9f6e]' : 'text-[#53647D]' }}">
-                {{ data_get($slot, 'startingTime') ?: '—' }} – {{ data_get($slot, 'endingTime') ?: '—' }}
-            </p>
-            <p class="mt-1 text-xs font-semibold uppercase tracking-wide {{ $open ? 'text-[#0f9f6e]' : 'text-[#53647D]' }}">
-                {{ $open ? 'Open for booking' : 'Closed' }}
-            </p>
-        </article>
+    <div class="mt-5 overflow-hidden rounded-xl border border-[#E2E8F0]">
+        @foreach ($dayOrder as $key => $label)
+        <div class="flex flex-col gap-2 border-b border-[#E2E8F0] px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:gap-4">
+            <p class="w-28 shrink-0 text-sm font-semibold {{ $timeSlots->has($key) ? 'text-[#0B1F3A]' : 'text-[#94A3B8]' }}">{{ $label }}</p>
+            @if ($timeSlots->has($key))
+            <div class="flex min-w-0 flex-wrap gap-2">
+                @foreach ($timeSlots->get($key) as $slot)
+                <span class="inline-flex items-center rounded-lg border border-[#D6E6FF] bg-[#F3F8FF] px-3 py-1.5 text-sm font-medium text-[#0B1F3A]">
+                    {{ $formatClock(data_get($slot, 'startingTime')) }} – {{ $formatClock(data_get($slot, 'endingTime')) }}
+                </span>
+                @endforeach
+            </div>
+            @else
+            <span class="text-sm text-[#94A3B8]">Unavailable</span>
+            @endif
+        </div>
         @endforeach
     </div>
     @endif

@@ -9,7 +9,8 @@ use App\Models\Doctor;
 use App\Models\DoctorExperience;
 use App\Models\TimeSlot;
 use App\Services\AppointmentBooking;
-use App\Services\StripeCheckout;
+use App\Services\AppointmentReports;
+use App\Support\MedicalFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -21,7 +22,7 @@ class BookingController extends Controller
 {
     public function __construct(
         private AppointmentBooking $booking,
-        private StripeCheckout $stripe,
+        private AppointmentReports $reports,
     ) {}
 
     public function create(Request $request, Doctor $doctor): View
@@ -46,18 +47,32 @@ class BookingController extends Controller
             ]);
         }
 
+        $file = ['file', 'mimes:jpg,jpeg,png,gif,webp,pdf', 'max:10240'];
         $input = $request->validate([
             'appointment_date' => ['nullable', 'date'],
             'health_issues' => ['nullable', 'string', 'max:2000'],
+            'symptom_duration' => ['nullable', 'string', 'max:80'],
+            'current_medicines' => ['nullable', 'string', 'max:500'],
             'slot_day' => ['nullable', 'string', 'max:20'],
             'starting_time' => ['nullable', 'string', 'max:8'],
             'ending_time' => ['nullable', 'string', 'max:8'],
+            'blood_report_name' => ['nullable', 'string', 'max:120'],
+            'xray_report_name' => ['nullable', 'string', 'max:120'],
             'other_report_name' => ['nullable', 'string', 'max:120'],
+            'blood_reports' => ['nullable', 'array', 'max:8'],
+            'blood_reports.*' => $file,
+            'xray_reports' => ['nullable', 'array', 'max:8'],
+            'xray_reports.*' => $file,
+            'other_reports' => ['nullable', 'array', 'max:8'],
+            'other_reports.*' => $file,
         ]);
+
+        unset($input['blood_reports'], $input['xray_reports'], $input['other_reports']);
 
         $request->session()->put('booking_draft', [
             'doctor_id' => $doctor->id,
             'input' => $input,
+            'files' => $this->stashDraftFiles($request),
         ]);
         $request->session()->put('url.intended', route('doctors.book', $doctor));
 
@@ -73,23 +88,31 @@ class BookingController extends Controller
         $this->releaseAbandonedCheckout($request, $doctor);
 
         if ($request->user()?->role === 'patient') {
+            $draft = $request->session()->get('booking_draft');
+
+            if (is_array($draft) && (int) ($draft['doctor_id'] ?? 0) === $doctor->id) {
+                $request->session()->put('booking_input', [
+                    'doctor_id' => $doctor->id,
+                    'input' => is_array($draft['input'] ?? null) ? $draft['input'] : [],
+                ]);
+                $request->session()->put('booking_files', [
+                    'doctor_id' => $doctor->id,
+                    'files' => is_array($draft['files'] ?? null) ? $draft['files'] : [],
+                ]);
+            }
+
             $request->session()->forget('booking_draft');
         }
 
-        $doctor->load([
-            'user',
-            'experiences',
-            'timeSlots',
-            'appointments' => function ($query) {
-                $query->where('status', '!=', 'cancelled')
-                    ->whereDate('appointment_date', '>=', today()->toDateString())
-                    ->whereDate('appointment_date', '<=', today()->addDays(AppointmentBooking::DAYS - 1)->toDateString());
-            },
-        ]);
+        $doctor->load(['user', 'experiences', 'timeSlots']);
 
         return [
             'doctor' => $this->present($doctor),
-            'blocked' => $this->booking->blockedWindows($doctor),
+            'openSlots' => $this->booking->calendar($doctor),
+            'draftReports' => array_map(
+                fn (array $file) => (string) ($file['original_name'] ?? 'Report'),
+                $this->draftFiles($request, $doctor),
+            ),
         ];
     }
 
@@ -110,7 +133,10 @@ class BookingController extends Controller
             return back()->withErrors($exception->errors())->withInput();
         }
 
-        $reports = $this->storeReports($request, $request->user()->id, $data['appointment_date']);
+        $reports = array_merge(
+            $this->reports->store($request, $request->user()->id, $data['appointment_date']),
+            $this->copyDraftReports($request, $doctor, $request->user()->id, $data['appointment_date']),
+        );
 
         try {
             $appointment = $this->booking->reserveWindow(
@@ -119,59 +145,163 @@ class BookingController extends Controller
                 date: $data['appointment_date'],
                 startingTime: $data['starting_time'],
                 endingTime: $data['ending_time'],
-                reason: $data['health_issues'] ?? null,
+                reason: $this->reasonFrom($data),
                 reports: $reports,
             );
         } catch (ValidationException $exception) {
-            $this->deleteReports($reports);
+            $this->reports->discard($reports);
 
             return back()->withErrors($exception->errors())->withInput();
         } catch (\Throwable $exception) {
-            $this->deleteReports($reports);
+            $this->reports->discard($reports);
 
             throw $exception;
         }
 
-        if ($appointment->payment_status === 'paid') {
-            return redirect()->route('checkout.success', $appointment);
-        }
+        $this->clearDraftReports($request, $doctor);
 
-        $appointment->load('patient');
-
-        try {
-            $session = $this->stripe->createSession(
-                $appointment,
-                $doctor->loadMissing('user'),
-                route('checkout.success', $appointment).'?session_id={CHECKOUT_SESSION_ID}',
-                route('doctors.book', $doctor).'?checkout=cancel&session_id={CHECKOUT_SESSION_ID}',
-            );
-        } catch (\Throwable) {
-            $appointment->forceFill([
-                'payment_status' => 'failed',
-                'status' => 'cancelled',
-            ])->save();
-
-            return back()
-                ->withErrors(['appointment_date' => 'Payment could not be started. Please try again.'])
-                ->withInput();
-        }
-
-        $appointment->forceFill([
-            'stripe_session_id' => $session->id,
-        ])->save();
-
-        return redirect()->away($session->url);
+        return redirect()->route('checkout.success', $appointment);
     }
 
     public function success(Request $request, Appointment $appointment): View
     {
         abort_unless($request->user()?->id === $appointment->patient_id, 403);
 
-        $appointment->load('doctor.user');
+        $appointment->load(['doctor.user', 'doctor.qualifications']);
 
         return view('public.checkout.success', [
             'appointment' => $appointment,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function reasonFrom(array $data): ?string
+    {
+        $parts = [];
+        $issues = trim((string) ($data['health_issues'] ?? ''));
+        $duration = trim((string) ($data['symptom_duration'] ?? ''));
+        $medicines = trim((string) ($data['current_medicines'] ?? ''));
+
+        if ($issues !== '') {
+            $parts[] = $issues;
+        }
+
+        if ($duration !== '') {
+            $parts[] = 'Duration: '.$duration;
+        }
+
+        if ($medicines !== '') {
+            $parts[] = 'Medicines: '.$medicines;
+        }
+
+        return $parts === [] ? null : implode("\n", $parts);
+    }
+
+    /**
+     * @return list<array{group: string, path: string, original_name: string}>
+     */
+    private function stashDraftFiles(Request $request): array
+    {
+        $stored = [];
+        $groups = [
+            'blood_reports' => ['blood_report_name', 'Blood Test Reports'],
+            'xray_reports' => ['xray_report_name', 'X-Ray Scans'],
+        ];
+
+        foreach ($groups as $field => [$nameField, $fallback]) {
+            $group = trim((string) $request->input($nameField, ''));
+
+            if ($group === '') {
+                $group = $fallback;
+            }
+
+            foreach ($request->file($field, []) as $file) {
+                if ($file instanceof UploadedFile) {
+                    $stored[] = $this->keepDraft($request, $file, $group);
+                }
+            }
+        }
+
+        $otherName = trim((string) $request->input('other_report_name', ''));
+
+        if ($otherName === '') {
+            $otherName = 'Other reports';
+        }
+
+        foreach ($request->file('other_reports', []) as $file) {
+            if ($file instanceof UploadedFile) {
+                $stored[] = $this->keepDraft($request, $file, $otherName);
+            }
+        }
+
+        return $stored;
+    }
+
+    /**
+     * @return array{group: string, path: string, original_name: string}
+     */
+    private function keepDraft(Request $request, UploadedFile $file, string $group): array
+    {
+        return [
+            'group' => $group,
+            'path' => $file->store('booking-drafts/'.$request->session()->getId(), 'local'),
+            'original_name' => $file->getClientOriginalName(),
+        ];
+    }
+
+    /**
+     * @return list<array{group: string, path: string, original_name: string}>
+     */
+    private function draftFiles(Request $request, Doctor $doctor): array
+    {
+        $draft = $request->session()->get('booking_files');
+
+        if (! is_array($draft) || (int) ($draft['doctor_id'] ?? 0) !== $doctor->id) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $draft['files'] ?? [],
+            fn ($file) => is_array($file) && filled($file['path'] ?? null),
+        ));
+    }
+
+    /**
+     * @return list<array{group_name: string, path: string, original_name: string}>
+     */
+    private function copyDraftReports(Request $request, Doctor $doctor, int $patientId, string $date): array
+    {
+        $copied = [];
+
+        foreach ($this->draftFiles($request, $doctor) as $file) {
+            $source = (string) $file['path'];
+
+            if (! Storage::disk('local')->exists($source)) {
+                continue;
+            }
+
+            $target = 'appointment-reports/'.$patientId.'/'.$date.'/'.basename($source);
+            MedicalFile::put($target, (string) Storage::disk('local')->get($source));
+            $copied[] = [
+                'group_name' => (string) ($file['group'] ?? 'Other reports'),
+                'path' => $target,
+                'original_name' => (string) ($file['original_name'] ?? 'report'),
+            ];
+        }
+
+        return $copied;
+    }
+
+    private function clearDraftReports(Request $request, Doctor $doctor): void
+    {
+        foreach ($this->draftFiles($request, $doctor) as $file) {
+            Storage::disk('local')->delete((string) $file['path']);
+        }
+
+        $request->session()->forget('booking_files');
+        $request->session()->forget('booking_input');
     }
 
     private function ensureBookable(Doctor $doctor): void
@@ -219,71 +349,6 @@ class BookingController extends Controller
     }
 
     /**
-     * @return list<array{group_name: string, path: string, original_name: string}>
-     */
-    private function storeReports(Request $request, int $patientId, string $date): array
-    {
-        $stored = [];
-
-        $groups = [
-            'blood_reports' => 'Blood Test Reports',
-            'xray_reports' => 'X-Ray Scans',
-        ];
-
-        foreach ($groups as $field => $name) {
-            foreach ($request->file($field, []) as $file) {
-                if ($file instanceof UploadedFile) {
-                    $stored[] = $this->keepFile($file, $patientId, $date, $name);
-                }
-            }
-        }
-
-        $otherName = trim((string) $request->input('other_report_name'));
-
-        foreach ($request->file('other_reports', []) as $file) {
-            if (! $file instanceof UploadedFile) {
-                continue;
-            }
-
-            if ($otherName === '') {
-                $this->deleteReports($stored);
-
-                throw ValidationException::withMessages([
-                    'other_report_name' => 'Name the other report group before confirming.',
-                ]);
-            }
-
-            $stored[] = $this->keepFile($file, $patientId, $date, $otherName);
-        }
-
-        return $stored;
-    }
-
-    /**
-     * @return array{group_name: string, path: string, original_name: string}
-     */
-    private function keepFile(UploadedFile $file, int $patientId, string $date, string $group): array
-    {
-        return [
-            'group_name' => $group,
-            'path' => $file->store('appointment-reports/'.$patientId.'/'.$date, 'public'),
-            'original_name' => $file->getClientOriginalName(),
-        ];
-    }
-
-    /**
-     * @param  list<array{group_name: string, path: string, original_name: string}>  $reports
-     */
-    private function deleteReports(array $reports): void
-    {
-        $paths = array_values(array_filter(array_column($reports, 'path')));
-
-        if ($paths !== []) {
-            Storage::disk('public')->delete($paths);
-        }
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function present(Doctor $doctor): array
@@ -299,12 +364,14 @@ class BookingController extends Controller
             'ticketPrice' => $doctor->ticketPrice,
             'about' => $doctor->about,
             'bio' => $doctor->bio,
+            'appointmentDuration' => (int) ($doctor->appointment_duration ?? 30),
             'experiences' => $doctor->experiences->map(function (DoctorExperience $experience) {
                 return [
                     'startingDate' => $experience->start_date?->toDateString(),
                     'endingDate' => $experience->end_date?->toDateString(),
                     'position' => $experience->designation,
                     'hospital' => $experience->hospital_name,
+                    'location' => $experience->location,
                 ];
             })->all(),
             'timeSlots' => $doctor->timeSlots->map(function (TimeSlot $slot) {

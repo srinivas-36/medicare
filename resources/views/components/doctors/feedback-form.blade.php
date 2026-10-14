@@ -1,86 +1,68 @@
-@props(['doctor'])
+@props(['state'])
 
 @php
-$doctorId = data_get($doctor, 'id', data_get($doctor, '_id'));
-$action = $doctorId && \Illuminate\Support\Facades\Route::has('doctors.reviews.store')
-? route('doctors.reviews.store', $doctorId)
-: '#';
+    $selected = (int) old('rating', $state['mine']['rating'] ?? 0);
+    $draft = old('reviewText', $state['mine']['body'] ?? '');
 @endphp
 
-<form action="{{ $action }}" method="POST" class="hidden" data-feedback-form>
+<form action="{{ $state['sendUrl'] }}" method="POST" data-no-lock="true" @submit.prevent="send">
     @csrf
-    <input type="hidden" name="rating" value="0" data-rating-input>
 
     <div>
-        <h3 class="mb-4 mt-0 text-[16px] font-semibold leading-6 text-[#0B1F3A]">
-            How would rate the Overall Experience
-        </h3>
-        <div data-rating-stars>
+        <h3 class="text-base font-semibold text-heading">How would you rate the overall experience?</h3>
+        <div class="mt-3 flex gap-1" role="radiogroup" aria-label="Overall experience">
             @for ($index = 1; $index <= 5; $index++)
-                <button type="button" data-star="{{ $index }}" class="cursor-pointer border-none bg-transparent text-[22px] text-gray-400 outline-none">
-                <x-doctors.star />
-                </button>
-                @endfor
+                <label
+                    class="cursor-pointer rounded text-[22px] text-[#D5DDE8] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary"
+                    :style="{{ $index }} <= (hover || rating) ? 'color: #E99A17' : ''"
+                >
+                    <input
+                        type="radio"
+                        name="rating"
+                        value="{{ $index }}"
+                        class="sr-only"
+                        x-model.number="rating"
+                        @checked($selected === $index)
+                        @mouseenter="hover = {{ $index }}"
+                        @mouseleave="hover = Number(rating) || 0"
+                        @change="hover = Number(rating) || 0"
+                        aria-label="{{ $index }} {{ $index === 1 ? 'star' : 'stars' }}"
+                        @if ($index === 1) required @endif
+                    >
+                    <x-doctors.star />
+                </label>
+            @endfor
         </div>
+        @error('rating')
+            <p class="mt-2 text-sm text-danger">{{ $message }}</p>
+        @enderror
     </div>
 
-    <div class="mt-[30px]">
-        <h3 class="mb-4 mt-0 text-[16px] font-semibold leading-6 text-[#0B1F3A]">
-            Share your Feedback or suggestions *
-        </h3>
-        <textarea name="reviewText" rows="5" placeholder="Write your message" class="w-full rounded-md border border-solid border-[#E2EAF4] px-4 py-3 outline-[#1769FF] focus:outline"></textarea>
+    <div class="mt-6">
+        <label for="review-text" class="text-base font-semibold text-heading">Share your feedback or suggestions</label>
+        <textarea
+            id="review-text"
+            name="reviewText"
+            rows="5"
+            maxlength="1000"
+            required
+            x-model="body"
+            placeholder="How was the visit? What should other patients know?"
+            class="mt-3 w-full rounded-md border border-solid border-[#E2EAF4] px-4 py-3 text-heading outline-[#1769FF] focus:outline"
+        >{{ $draft }}</textarea>
+        @error('reviewText')
+            <p class="mt-2 text-sm text-danger">{{ $message }}</p>
+        @enderror
     </div>
 
-    <button type="submit" class="btn-primary mt-6">
-        Submit Feedback
+    <p class="mt-3 text-sm text-text">Your name is shown with the review. It appears on this page as soon as you submit, and you can update it later.</p>
+
+    <p x-show="error" x-cloak class="mt-3 text-sm text-danger" x-text="error"></p>
+    <p x-show="hint" x-cloak class="mt-3 text-sm text-[#B45309]" x-text="hint"></p>
+
+    <button type="submit" class="btn-primary mt-6 disabled:cursor-not-allowed disabled:opacity-60" :disabled="sending">
+        <span x-text="sending ? 'Saving...' : (canWrite ? (mineId ? 'Update feedback' : 'Submit feedback') : 'Sign in to submit')">
+            {{ $state['canWrite'] ? (($state['mine']['id'] ?? null) ? 'Update feedback' : 'Submit feedback') : 'Sign in to submit' }}
+        </span>
     </button>
 </form>
-
-@once
-<script>
-    document.querySelectorAll('[data-feedback-form]').forEach((form) => {
-        const ratingInput = form.querySelector('[data-rating-input]');
-        const starButtons = [...form.querySelectorAll('[data-star]')];
-        let rating = 0;
-        let hover = 0;
-
-        const paintStars = () => {
-            const active = (rating && hover) || hover;
-
-            starButtons.forEach((star) => {
-                const selected = Number(star.dataset.star) <= active;
-                star.classList.toggle('text-[#E99A17]', selected);
-                star.classList.toggle('text-gray-400', !selected);
-            });
-        };
-
-        starButtons.forEach((star) => {
-            const value = Number(star.dataset.star);
-
-            star.addEventListener('click', () => {
-                rating = value;
-                hover = value;
-                ratingInput.value = rating;
-                paintStars();
-            });
-
-            star.addEventListener('mouseenter', () => {
-                hover = value;
-                paintStars();
-            });
-
-            star.addEventListener('mouseleave', () => {
-                hover = rating;
-                paintStars();
-            });
-
-            star.addEventListener('dblclick', () => {
-                rating = 0;
-                hover = 0;
-                ratingInput.value = 0;
-                paintStars();
-            });
-        });
-    });
-</script>
-@endonce

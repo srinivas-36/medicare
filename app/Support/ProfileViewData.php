@@ -44,6 +44,8 @@ class ProfileViewData
                 'endingTime' => self::clock($item->ending_time),
                 'isAvailable' => (bool) $item->is_available,
             ])->all(),
+            'appointmentDuration' => (int) ($doctor->appointment_duration ?? 30),
+            'appointmentBuffer' => (int) ($doctor->appointment_buffer ?? 0),
         ];
     }
 

@@ -18,6 +18,9 @@ class Doctor extends Model
         'approval_status',
         'average_rating',
         'total_rating',
+        'appointment_duration',
+        'appointment_buffer',
+        'rejection_reason',
     ];
 
     protected function casts(): array
@@ -25,6 +28,8 @@ class Doctor extends Model
         return [
             'ticket_price' => 'decimal:2',
             'average_rating' => 'decimal:2',
+            'appointment_duration' => 'integer',
+            'appointment_buffer' => 'integer',
         ];
     }
 
@@ -58,6 +63,11 @@ class Doctor extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function receptionists(): HasMany
+    {
+        return $this->hasMany(Receptionist::class);
+    }
+
     public function experiences(): HasMany
     {
         return $this->hasMany(DoctorExperience::class);
@@ -73,14 +83,25 @@ class Doctor extends Model
         return $this->hasMany(TimeSlot::class);
     }
 
+    public function availabilityExceptions(): HasMany
+    {
+        return $this->hasMany(DoctorAvailabilityException::class);
+    }
+
     public function appointments(): HasMany
     {
         return $this->hasMany(Appointment::class);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(DoctorReview::class);
+    }
+
     public function registeredPatients(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'doctor_patients', 'doctor_id', 'patient_id')
+            ->withPivot(['origin', 'added_by'])
             ->withTimestamps();
     }
 

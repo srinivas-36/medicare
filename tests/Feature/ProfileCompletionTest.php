@@ -146,4 +146,93 @@ class ProfileCompletionTest extends TestCase
             ->assertSee('120/80')
             ->assertSee('Not known');
     }
+
+    public function test_doctor_saves_weekly_hours_and_appointment_settings(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'doctor',
+        ]);
+
+        $doctor = Doctor::query()->create([
+            'user_id' => $user->id,
+            'approval_status' => 'pending',
+            'ticket_price' => 100,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('doctor.profile.edit'))
+            ->assertOk()
+            ->assertSee('Availability & working hours')
+            ->assertSee('Copy hours to all days')
+            ->assertSee('Add hours')
+            ->assertSee('Appointment duration')
+            ->assertSee('Patients can book only within your available hours.');
+
+        $this->actingAs($user)
+            ->put(route('doctor.profile.update'), [
+                'name' => 'Dr Ada Lovelace',
+                'ticketPrice' => 200,
+                'appointmentDuration' => 30,
+                'appointmentBuffer' => 5,
+                'timeSlots' => [
+                    [
+                        'day' => 'monday',
+                        'startingTime' => '09:00',
+                        'endingTime' => '13:00',
+                        'isAvailable' => '1',
+                    ],
+                    [
+                        'day' => 'monday',
+                        'startingTime' => '14:00',
+                        'endingTime' => '18:00',
+                        'isAvailable' => '1',
+                    ],
+                    [
+                        'day' => 'thursday',
+                        'startingTime' => '10:00',
+                        'endingTime' => '14:00',
+                        'isAvailable' => '1',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('doctor.profile.show'));
+
+        $doctor->refresh();
+
+        $this->assertSame(30, $doctor->appointment_duration);
+        $this->assertSame(5, $doctor->appointment_buffer);
+        $this->assertSame(2, TimeSlot::query()->where('doctor_id', $doctor->id)->where('day', 'monday')->count());
+        $this->assertSame(0, TimeSlot::query()->where('doctor_id', $doctor->id)->where('day', 'wednesday')->count());
+
+        $this->actingAs($user)
+            ->get(route('doctor.profile.show'))
+            ->assertOk()
+            ->assertSee('Monday')
+            ->assertSee('09:00 AM')
+            ->assertSee('30 minute appointments, 5 minute buffer.');
+
+        $this->actingAs($user)
+            ->from(route('doctor.profile.edit'))
+            ->put(route('doctor.profile.update'), [
+                'name' => 'Dr Ada Lovelace',
+                'ticketPrice' => 200,
+                'appointmentDuration' => 30,
+                'appointmentBuffer' => 5,
+                'timeSlots' => [
+                    [
+                        'day' => 'monday',
+                        'startingTime' => '09:00',
+                        'endingTime' => '13:00',
+                        'isAvailable' => '1',
+                    ],
+                    [
+                        'day' => 'monday',
+                        'startingTime' => '12:00',
+                        'endingTime' => '15:00',
+                        'isAvailable' => '1',
+                    ],
+                ],
+            ])
+            ->assertSessionHasErrors('timeSlots.1.startingTime');
+    }
 }

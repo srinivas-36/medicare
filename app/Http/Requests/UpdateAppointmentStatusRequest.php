@@ -18,9 +18,13 @@ class UpdateAppointmentStatusRequest extends FormRequest
      */
     public function rules(): array
     {
+        $allowed = $this->user()?->role === 'doctor'
+            ? ['confirmed', 'checked_in', 'completed', 'cancelled', 'no_show']
+            : ['confirmed', 'checked_in', 'cancelled', 'no_show'];
+
         return [
-            'status' => ['required', Rule::in(['confirmed', 'completed', 'cancelled'])],
-            'cancel_reason' => ['nullable', 'string', 'max:255'],
+            'status' => ['required', Rule::in($allowed)],
+            'cancel_reason' => ['nullable', 'string', 'max:255', 'required_if:status,cancelled'],
         ];
     }
 }

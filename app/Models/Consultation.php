@@ -18,6 +18,8 @@ class Consultation extends Model
         'ai_summary',
         'ai_analysis',
         'ai_generated_at',
+        'follow_up_on',
+        'follow_up_instructions',
     ];
 
     protected function casts(): array
@@ -25,6 +27,7 @@ class Consultation extends Model
         return [
             'ai_analysis' => 'array',
             'ai_generated_at' => 'datetime',
+            'follow_up_on' => 'date',
         ];
     }
 

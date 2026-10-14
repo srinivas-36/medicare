@@ -35,9 +35,13 @@ return [
     ],
 
     'ai' => [
-        'base_url' => env('AI_BASE_URL', 'https://api.openai.com/v1'),
+        'base_url' => env('AI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
         'key' => env('AI_API_KEY'),
-        'model' => env('AI_MODEL', 'gpt-4o-mini'),
+        'model' => env('AI_MODEL', 'gemini-3.8-flash'),
+        'fallback_models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('AI_FALLBACK_MODELS', 'gemini-2.5-flash,gemini-2.5-flash-lite')),
+        ))),
     ],
 
     'slack' => [

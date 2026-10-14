@@ -35,37 +35,38 @@ class AppointmentBookingTest extends TestCase
             ->assertOk()
             ->assertSee('Book your appointment')
             ->assertSee('150.00 USD')
-            ->assertSee('Select time slot')
-            ->assertSee('Blood Test Reports')
-            ->assertSee('09:00')
+            ->assertSee('Available time slots')
+            ->assertSee('Blood tests')
+            ->assertSee('"start":"09:00","end":"12:00"', false)
+            ->assertDontSee('"start":"09:30"', false)
             ->assertDontSee('name="visit_type"', false);
 
         $this->actingAs($patient)
             ->post(route('doctors.book.store', $doctor), $this->window($date))
-            ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_1');
+            ->assertRedirect();
 
         $appointment = Appointment::query()->first();
 
         $this->assertNotNull($appointment);
-        $this->assertSame('pending', $appointment->status);
-        $this->assertSame('unpaid', $appointment->payment_status);
+        $this->assertSame('confirmed', $appointment->status);
+        $this->assertNull($appointment->payment_status);
         $this->assertSame('consultation', $appointment->visit_type);
-        $this->assertSame('cs_test_1', $appointment->stripe_session_id);
+        $this->assertNull($appointment->stripe_session_id);
+        $this->assertSame('12:00:00', $appointment->ending_time);
         $this->assertSame($patient->id, $appointment->patient_id);
 
         $this->actingAs($patient)
             ->get(route('checkout.success', $appointment))
             ->assertOk()
-            ->assertSee('Payment received. Confirmation is updating.');
+            ->assertSee('Appointment Confirmed!');
 
-        $this->assertSame('unpaid', $appointment->fresh()->payment_status);
+        $this->assertNull($appointment->fresh()->payment_status);
 
         $this->actingAs($patient)
             ->get(route('patient.bookings'))
             ->assertOk()
             ->assertSee('Dr Maya Chen')
-            ->assertSee('Pending')
-            ->assertSee('Unpaid');
+            ->assertSee('Confirmed');
 
         $this->actingAs($patient)
             ->get(route('patient.dashboard'))
@@ -84,13 +85,13 @@ class AppointmentBookingTest extends TestCase
 
         $this->actingAs($second)
             ->post(route('doctors.book.store', $doctor), $this->window($date, 'Follow up'))
-            ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_2');
+            ->assertRedirect();
 
         $this->assertDatabaseHas('appointments', [
             'patient_id' => $second->id,
             'doctor_id' => $doctor->id,
-            'status' => 'pending',
-            'payment_status' => 'unpaid',
+            'status' => 'confirmed',
+            'payment_status' => null,
         ]);
     }
 
@@ -107,14 +108,24 @@ class AppointmentBookingTest extends TestCase
                 'blood_reports' => [
                     UploadedFile::fake()->create('cbc-results.pdf', 20, 'application/pdf'),
                 ],
+                'xray_report_name' => 'Chest X-ray',
+                'xray_reports' => [
+                    UploadedFile::fake()->create('chest.png', 20, 'image/png'),
+                ],
+                'other_report_name' => 'Ultrasound',
+                'other_reports' => [
+                    UploadedFile::fake()->create('scan.pdf', 20, 'application/pdf'),
+                ],
             ]))
-            ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_1');
+            ->assertRedirect();
 
         $appointment = Appointment::query()->first();
         $report = $appointment->reports()->first();
 
         $this->assertNotNull($report);
         $this->assertSame('Blood Test Reports', $report->group_name);
+        $this->assertSame('Chest X-ray', $appointment->reports()->where('original_name', 'chest.png')->value('group_name'));
+        $this->assertSame('Ultrasound', $appointment->reports()->where('original_name', 'scan.pdf')->value('group_name'));
 
         $this->actingAs($patient)
             ->get(route('patient.bookings.show', $appointment))
@@ -149,7 +160,10 @@ class AppointmentBookingTest extends TestCase
 
         $this->actingAs($second)
             ->from(route('doctors.book', $doctor))
-            ->post(route('doctors.book.store', $doctor), $this->window($date, 'Taken'))
+            ->post(route('doctors.book.store', $doctor), array_merge($this->window($date, 'Taken'), [
+                'starting_time' => '10:00',
+                'ending_time' => '10:30',
+            ]))
             ->assertRedirect(route('doctors.book', $doctor))
             ->assertSessionHasErrors('starting_time');
 
@@ -212,7 +226,10 @@ class AppointmentBookingTest extends TestCase
 
         $this->get(route('doctors.book', $doctor))
             ->assertOk()
-            ->assertSee('Log in to book')
+            ->assertSee('Continue to sign in')
+            ->assertSee('name="blood_report_name"', false)
+            ->assertSee('name="xray_report_name"', false)
+            ->assertSee('name="other_report_name"', false)
             ->assertDontSee('Confirm appointment');
 
         $this->actingAs($doctorUser)
@@ -227,13 +244,27 @@ class AppointmentBookingTest extends TestCase
         [$doctorUser, $doctor, $date] = $this->makeDoctor();
         $patient = $this->makePatient();
 
+        Storage::fake('local');
+
         $this->post(route('doctors.book.remember', $doctor), [
             'appointment_date' => $date,
             'health_issues' => 'Morning headache',
+            'symptom_duration' => 'Less than a day',
+            'current_medicines' => 'Aspirin',
             'slot_day' => strtolower(now()->addDay()->format('l')),
             'starting_time' => '09:00',
             'ending_time' => '12:00',
+            'blood_reports' => [
+                UploadedFile::fake()->create('cbc-results.pdf', 20, 'application/pdf'),
+            ],
         ])->assertRedirect(route('login'));
+
+        $draft = session('booking_draft');
+
+        $this->assertIsArray($draft);
+        $this->assertArrayNotHasKey('blood_reports', $draft['input']);
+        $this->assertSame('cbc-results.pdf', $draft['files'][0]['original_name']);
+        Storage::disk('local')->assertExists($draft['files'][0]['path']);
 
         $this->followingRedirects()
             ->post('/login', [
@@ -243,6 +274,8 @@ class AppointmentBookingTest extends TestCase
             ->assertOk()
             ->assertSee('You are signed in')
             ->assertSee('Morning headache')
+            ->assertSee('Aspirin')
+            ->assertSee('Less than a day')
             ->assertSee('value="'.$date.'"', false)
             ->assertSee('value="09:00"', false);
 
@@ -259,6 +292,44 @@ class AppointmentBookingTest extends TestCase
             'email' => $doctorUser->email,
             'password' => 'password',
         ])->assertRedirect(route('dashboard', absolute: false));
+    }
+
+    public function test_patient_can_book_next_month_and_the_visit_details_are_stored(): void
+    {
+        [, $doctor, $date] = $this->makeDoctor();
+        $weekday = strtolower(Carbon::parse($date)->format('l'));
+        $later = now()->startOfMonth()->addMonth();
+
+        while (strtolower($later->format('l')) !== $weekday) {
+            $later->addDay();
+        }
+
+        $patient = $this->makePatient();
+        $this->mockCheckout();
+
+        $this->actingAs($patient)
+            ->post(route('doctors.book.store', $doctor), [
+                'appointment_date' => $later->toDateString(),
+                'slot_day' => $weekday,
+                'starting_time' => '09:00',
+                'ending_time' => '12:00',
+                'health_issues' => 'Chest pain when climbing stairs',
+                'symptom_duration' => '1–3 days',
+                'current_medicines' => 'Aspirin 100mg',
+            ])
+            ->assertRedirect();
+
+        $appointment = Appointment::query()->first();
+
+        $this->assertNotNull($appointment);
+        $this->assertSame($later->toDateString(), $appointment->appointment_date->toDateString());
+        $this->assertSame('09:00:00', $appointment->appointment_time);
+        $this->assertSame('12:00:00', $appointment->ending_time);
+        $this->assertSame('confirmed', $appointment->status);
+        $this->assertNull($appointment->payment_status);
+        $this->assertStringContainsString('Chest pain when climbing stairs', (string) $appointment->reason);
+        $this->assertStringContainsString('Duration: 1–3 days', (string) $appointment->reason);
+        $this->assertStringContainsString('Medicines: Aspirin 100mg', (string) $appointment->reason);
     }
 
     public function test_verified_webhook_confirms_the_visit_and_a_cancel_frees_the_window(): void
@@ -330,8 +401,8 @@ class AppointmentBookingTest extends TestCase
             'patient_id' => $patient->id,
             'doctor_id' => $doctor->id,
             'appointment_date' => $date,
-            'appointment_time' => '09:00:00',
-            'ending_time' => '12:00:00',
+            'appointment_time' => '11:00:00',
+            'ending_time' => '11:30:00',
             'status' => 'pending',
             'visit_type' => 'consultation',
             'payment_status' => 'unpaid',
@@ -364,13 +435,13 @@ class AppointmentBookingTest extends TestCase
 
         $response->assertRedirect(route('checkout.success', $appointment));
         $this->assertSame('confirmed', $appointment->status);
-        $this->assertSame('paid', $appointment->payment_status);
+        $this->assertNull($appointment->payment_status);
         $this->assertNull($appointment->stripe_session_id);
 
         $this->actingAs($patient)
             ->get(route('checkout.success', $appointment))
             ->assertOk()
-            ->assertSee('Appointment confirmed')
+            ->assertSee('Appointment Confirmed!')
             ->assertSee('0.00 USD');
     }
 
@@ -378,7 +449,12 @@ class AppointmentBookingTest extends TestCase
     {
         [, $doctor, $date] = $this->makeDoctor();
         $patient = $this->makePatient();
-        $receptionist = User::factory()->create(['role' => 'receptionist']);
+        $receptionist = User::factory()->create([
+            'role' => 'receptionist',
+        ]);
+        $receptionist->receptionist()->create([
+            'doctor_id' => $doctor->id,
+        ]);
 
         $this->actingAs($receptionist)
             ->post(route('doctors.book.store', $doctor), $this->window($date))
@@ -389,12 +465,12 @@ class AppointmentBookingTest extends TestCase
                 'doctor_id' => $doctor->id,
                 'patient_id' => $patient->id,
                 'date' => $date,
-                'time' => '11:00',
+                'slot' => '09:00|12:00',
                 'reason' => 'Desk booking',
                 'visit_type' => 'check-up',
             ])
             ->assertRedirect(route('receptionist.appointments'))
-            ->assertSessionHas('status', 'Appointment booked.');
+            ->assertSessionHas('status');
 
         $this->assertDatabaseHas('appointments', [
             'patient_id' => $patient->id,

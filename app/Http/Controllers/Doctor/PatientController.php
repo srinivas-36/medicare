@@ -5,19 +5,27 @@ namespace App\Http\Controllers\Doctor;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDoctorPatientRequest;
 use App\Models\Appointment;
+use App\Models\Consultation;
 use App\Models\Doctor;
 use App\Models\User;
 use App\Services\AppointmentBooking;
 use App\Support\AppointmentPresenter;
+use App\Support\PatientRoster;
+use App\Support\ReferralDesk;
+use App\Support\ReferralSuggestions;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PatientController extends Controller
 {
-    public function __construct(private AppointmentBooking $booking) {}
+    public function __construct(
+        private AppointmentBooking $booking,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -33,27 +41,85 @@ class PatientController extends Controller
         $registeredIds = $doctor->registeredPatients()->pluck('users.id');
         $ids = $summaries->keys()->merge($registeredIds)->unique()->filter()->values();
 
+        $search = trim($request->string('q')->toString());
+
         $users = User::query()
             ->whereIn('id', $ids)
+            ->when($search !== '', function ($query) use ($search) {
+                $like = '%'.addcslashes($search, '%_\\').'%';
+                $query->where(function ($query) use ($like) {
+                    $query->where('name', 'like', $like)
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('phone', 'like', $like);
+                });
+            })
             ->orderBy('name')
             ->get();
 
-        $patients = $users->map(function (User $user) use ($summaries, $registeredIds) {
+        $patientIds = $users->pluck('id');
+
+        $completed = $patientIds->isEmpty()
+            ? collect()
+            : Appointment::query()
+                ->where('doctor_id', $doctor->id)
+                ->where('status', 'completed')
+                ->whereIn('patient_id', $patientIds)
+                ->orderByDesc('appointment_date')
+                ->orderByDesc('appointment_time')
+                ->get()
+                ->unique('patient_id')
+                ->keyBy('patient_id');
+
+        $nextVisits = $patientIds->isEmpty()
+            ? collect()
+            : Appointment::query()
+                ->where('doctor_id', $doctor->id)
+                ->whereIn('patient_id', $patientIds)
+                ->whereIn('status', ['pending', 'confirmed', 'checked_in'])
+                ->upcoming()
+                ->orderBy('appointment_date')
+                ->orderBy('appointment_time')
+                ->get()
+                ->unique('patient_id')
+                ->keyBy('patient_id');
+
+        $followUps = $patientIds->isEmpty()
+            ? collect()
+            : Consultation::query()
+                ->where('doctor_id', $doctor->id)
+                ->whereIn('patient_id', $patientIds)
+                ->whereNotNull('follow_up_on')
+                ->whereDate('follow_up_on', '>=', today())
+                ->orderBy('follow_up_on')
+                ->get()
+                ->unique('patient_id')
+                ->keyBy('patient_id');
+
+        $sources = PatientRoster::labelsFor($doctor, $users, $request->user());
+
+        $patients = $users->map(function (User $user) use ($summaries, $completed, $nextVisits, $followUps, $sources) {
             $row = $summaries->get($user->id);
+            $last = $completed->get($user->id);
+            $next = $nextVisits->get($user->id);
+            $followUp = $followUps->get($user->id);
 
             return [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'visits' => (int) ($row->visit_count ?? 0),
-                'last_visit' => $row ? AppointmentPresenter::date($row->last_visit_on) : 'Not seen yet',
+                'last_visit' => $last ? AppointmentPresenter::date($last->appointment_date) : 'No completed visit',
                 'last_visit_on' => $row->last_visit_on ?? null,
-                'source' => $registeredIds->contains($user->id) ? 'Added by you' : 'From a visit',
+                'next' => $next ? AppointmentPresenter::date($next->appointment_date).' · '.AppointmentPresenter::time($next->appointment_time) : null,
+                'follow_up' => $followUp ? AppointmentPresenter::date($followUp->follow_up_on) : null,
+                'source' => $sources[$user->id] ?? 'From a visit',
             ];
         })->sortByDesc('last_visit_on')->values()->all();
 
         return view('dashboard.doctor.patients.index', [
             'patients' => $patients,
+            'search' => $search,
+            'hasPatients' => $ids->isNotEmpty(),
         ]);
     }
 
@@ -68,14 +134,52 @@ class PatientController extends Controller
             $selectedDate = now()->toDateString();
         }
 
-        $schedule = $this->booking->slotsForNextDays($doctor);
+        $schedule = $this->booking->calendar($doctor);
+        $selectedPatient = null;
+        $selectedId = old('patient_id');
+
+        if (is_numeric($selectedId)) {
+            $selectedPatient = User::query()->where('role', 'patient')->find($selectedId);
+        }
 
         return view('dashboard.doctor.patients.create', [
             'schedule' => $schedule,
             'selectedDate' => $selectedDate,
             'times' => $schedule[$selectedDate] ?? [],
             'minDate' => now()->toDateString(),
-            'maxDate' => now()->addDays(AppointmentBooking::DAYS - 1)->toDateString(),
+            'maxDate' => AppointmentBooking::bookableUntil()->toDateString(),
+            'selectedPatient' => $selectedPatient,
+        ]);
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $this->doctor($request);
+        $term = trim($request->string('q')->toString());
+
+        if (mb_strlen($term) < 2) {
+            return response()->json(['patients' => []]);
+        }
+
+        $patients = User::query()
+            ->where('role', 'patient')
+            ->where(function ($query) use ($term) {
+                $like = '%'.addcslashes($term, '%_\\').'%';
+                $query->where('name', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orWhere('phone', 'like', $like);
+            })
+            ->orderBy('name')
+            ->limit(8)
+            ->get(['id', 'name', 'email', 'phone']);
+
+        return response()->json([
+            'patients' => $patients->map(fn (User $patient) => [
+                'id' => $patient->id,
+                'name' => $patient->name,
+                'email' => $patient->email,
+                'phone' => $patient->phone,
+            ])->values(),
         ]);
     }
 
@@ -83,6 +187,12 @@ class PatientController extends Controller
     {
         $doctor = $this->doctor($request);
         $data = $request->validated();
+
+        if (($data['mode'] ?? 'new') === 'existing') {
+            $patient = User::query()->where('role', 'patient')->findOrFail($data['patient_id']);
+
+            return $this->bookAddedPatient($doctor, $patient, $data, $request->user());
+        }
 
         $existing = User::query()->where('email', $data['email'])->first();
 
@@ -93,24 +203,10 @@ class PatientController extends Controller
         }
 
         if ($existing) {
-            $doctor->registeredPatients()->syncWithoutDetaching([$existing->id]);
-
-            $appointment = $this->booking->create(
-                patient: $existing,
-                doctor: $doctor->load('user'),
-                date: $data['date'],
-                time: $data['time'],
-                reason: $data['reason'] ?? null,
-                visitType: $data['visit_type'],
-                status: 'confirmed',
-            );
-
-            return redirect()
-                ->route('doctor.appointments.show', $appointment)
-                ->with('status', 'Appointment booked for '.$existing->name.'.');
+            return $this->bookAddedPatient($doctor, $existing, $data, $request->user());
         }
 
-        $patient = DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($doctor, $data, $request) {
             $patient = User::create([
                 'name' => $data['name'],
                 'slug' => User::uniqueSlug($data['name']),
@@ -127,24 +223,8 @@ class PatientController extends Controller
                 'blood_type' => $data['blood_type'] ?? null,
             ]);
 
-            return $patient;
+            return $this->bookAddedPatient($doctor, $patient, $data, $request->user());
         });
-
-        $doctor->registeredPatients()->syncWithoutDetaching([$patient->id]);
-
-        $appointment = $this->booking->create(
-            patient: $patient,
-            doctor: $doctor->load('user'),
-            date: $data['date'],
-            time: $data['time'],
-            reason: $data['reason'] ?? null,
-            visitType: $data['visit_type'],
-            status: 'confirmed',
-        );
-
-        return redirect()
-            ->route('doctor.appointments.show', $appointment)
-            ->with('status', 'Appointment booked for '.$patient->name.'.');
     }
 
     public function show(Request $request, User $patient): View
@@ -156,7 +236,7 @@ class PatientController extends Controller
         $linked = $doctor->registeredPatients()->where('users.id', $patient->id)->exists();
 
         $appointments = Appointment::query()
-            ->with('patient')
+            ->with(['patient', 'consultation', 'reports', 'referrals.toDoctor.user'])
             ->where('doctor_id', $doctor->id)
             ->where('patient_id', $patient->id)
             ->orderByDesc('appointment_date')
@@ -168,13 +248,144 @@ class PatientController extends Controller
 
         $patient->load('patient_profile');
 
+        $chart = $appointments
+            ->filter(function (Appointment $appointment) {
+                return in_array($appointment->status, ['pending', 'confirmed', 'checked_in'], true)
+                    && $appointment->appointment_date?->greaterThanOrEqualTo(today());
+            })
+            ->sortBy(fn (Appointment $appointment) => $appointment->appointment_date->format('Y-m-d').' '.(string) $appointment->appointment_time)
+            ->first() ?? $appointments->first();
+
+        $referralAppointment = $appointments
+            ->filter(fn (Appointment $appointment) => $appointment->canRefer() && $appointment->appointment_date?->greaterThanOrEqualTo(today()))
+            ->sortBy(fn (Appointment $appointment) => $appointment->appointment_date->format('Y-m-d').' '.(string) $appointment->appointment_time)
+            ->first()
+            ?? $appointments->first(fn (Appointment $appointment) => $appointment->canRefer());
+
         return view('dashboard.doctor.patients.show', [
             'patient' => $patient,
+            'addedLabel' => PatientRoster::labelFor($doctor, $patient, $request->user()),
             'profile' => $patient->patient_profile,
+            'chartId' => $chart?->id,
+            'referralAppointment' => $referralAppointment,
+            'actionDefaultId' => $referralAppointment?->id,
+            'referralDesk' => $referralAppointment ? ReferralDesk::for($doctor, $referralAppointment) : null,
             'visits' => $appointments
-                ->map(fn (Appointment $appointment) => AppointmentPresenter::doctor($appointment))
+                ->map(function (Appointment $appointment) {
+                    $row = AppointmentPresenter::doctor($appointment);
+                    $row['visit'] = AppointmentPresenter::VISIT_LABELS[$appointment->visit_type] ?? 'Visit';
+                    $row['diagnosis'] = $appointment->consultation?->diagnosis;
+                    $row['plan'] = $appointment->consultation?->plan;
+                    $clinical = collect([
+                        $appointment->reason,
+                        $appointment->consultation?->diagnosis,
+                        $appointment->consultation?->clinical_notes,
+                    ])->filter(fn ($value) => filled($value))->implode("\n");
+                    $symptoms = ReferralSuggestions::analyze($clinical)['symptoms'];
+                    $row['clinical_notes'] = $appointment->consultation?->clinical_notes ?? '';
+                    $row['follow_up_instructions'] = $appointment->consultation?->follow_up_instructions ?? '';
+                    $row['follow_up_on'] = $appointment->consultation?->follow_up_on?->toDateString() ?? '';
+                    $row['can_act'] = $appointment->canRefer();
+                    $row['consult_url'] = route('doctor.appointments.consult.update', $appointment);
+                    $row['refer_url'] = route('doctor.referrals.store', $appointment);
+                    $row['preview_url'] = route('doctor.referrals.preview.store', $appointment);
+                    $row['draft'] = $symptoms === []
+                        ? ''
+                        : 'Please assess '.($appointment->patient?->name ?: 'this patient').' for '.implode(', ', $symptoms).'.';
+                    $row['report_files'] = $appointment->reports->map(fn ($report) => [
+                        'id' => $report->id,
+                        'name' => $report->original_name,
+                        'url' => route('doctor.appointments.reports.show', [$appointment, $report]),
+                    ])->values()->all();
+                    $row['reports'] = $appointment->reports->count();
+                    $row['referrals'] = $appointment->referrals->map(fn ($referral) => [
+                        'id' => $referral->id,
+                        'doctor' => $referral->toDoctor?->user?->name ?? 'Doctor',
+                        'status' => $referral->statusLabel(),
+                    ])->all();
+
+                    return $row;
+                })
                 ->all(),
         ]);
+    }
+
+    public function update(Request $request, User $patient): RedirectResponse
+    {
+        $doctor = $this->doctor($request);
+
+        abort_unless($patient->role === 'patient', 404);
+
+        $linked = $doctor->registeredPatients()->where('users.id', $patient->id)->exists();
+        $hasVisit = Appointment::query()
+            ->where('doctor_id', $doctor->id)
+            ->where('patient_id', $patient->id)
+            ->exists();
+
+        abort_if(! $linked && ! $hasVisit, 404);
+
+        foreach (['phone', 'age', 'gender', 'blood_type', 'bp', 'diabetic', 'hyperthyroidism'] as $key) {
+            if ($request->input($key) === '') {
+                $request->merge([$key => null]);
+            }
+        }
+
+        $data = $request->validate([
+            'phone' => ['nullable', 'string', 'max:30'],
+            'age' => ['nullable', 'integer', 'min:0', 'max:120'],
+            'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
+            'blood_type' => ['nullable', 'string', 'max:20'],
+            'bp' => ['nullable', 'string', 'max:20'],
+            'diabetic' => ['nullable', Rule::in(['yes', 'no'])],
+            'hyperthyroidism' => ['nullable', Rule::in(['yes', 'no'])],
+        ]);
+
+        $patient->update([
+            'phone' => $data['phone'] ?? null,
+            'gender' => $data['gender'] ?? null,
+        ]);
+
+        $profile = $patient->patient_profile()->firstOrNew([]);
+        $notes = is_array($profile->health_notes) ? $profile->health_notes : [];
+
+        foreach (['bp', 'diabetic', 'hyperthyroidism'] as $key) {
+            $previous = is_array($notes[$key] ?? null) ? $notes[$key] : ['known' => true, 'value' => null];
+            $value = $data[$key] ?? null;
+            $notes[$key] = filled($value)
+                ? ['known' => true, 'value' => $value]
+                : ['known' => filter_var($previous['known'] ?? true, FILTER_VALIDATE_BOOLEAN), 'value' => null];
+        }
+
+        $profile->age = $data['age'] ?? null;
+        $profile->blood_type = $data['blood_type'] ?? null;
+        $profile->health_notes = $notes;
+        $profile->user()->associate($patient);
+        $profile->save();
+
+        return redirect()
+            ->route('doctor.patients.show', $patient)
+            ->with('status', 'Patient chart updated.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function bookAddedPatient(Doctor $doctor, User $patient, array $data, User $actor): RedirectResponse
+    {
+        $appointment = $this->booking->create(
+            patient: $patient,
+            doctor: $doctor->load('user'),
+            date: $data['date'],
+            time: $data['time'],
+            reason: $data['reason'] ?? null,
+            visitType: $data['visit_type'],
+            status: 'confirmed',
+            bookedBy: $actor,
+        );
+
+        return redirect()
+            ->route('doctor.appointments.show', $appointment)
+            ->with('status', 'Appointment booked for '.$patient->name.'.');
     }
 
     private function doctor(Request $request): Doctor

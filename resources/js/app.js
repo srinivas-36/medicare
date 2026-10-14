@@ -1,10 +1,22 @@
 import './bootstrap';
+import { registerConfirmDialog } from './confirm-dialog';
 
 import Alpine from 'alpinejs';
+import { registerAnalysisPoll } from './analysis-poll';
+import { registerDoctorReviews } from './doctor-reviews';
+import { registerReferralPreview } from './referral-preview';
+import { registerVisitChat } from './visit-chat';
 
 window.Alpine = Alpine;
 
+registerAnalysisPoll(Alpine);
+registerDoctorReviews(Alpine);
+registerReferralPreview(Alpine);
+registerVisitChat(Alpine);
+
 Alpine.start();
+
+registerConfirmDialog();
 
 /*
     After a real submit (browser validation already passed), disable the button
@@ -14,7 +26,7 @@ Alpine.start();
 document.addEventListener('submit', (event) => {
     const form = event.target;
 
-    if (!(form instanceof HTMLFormElement) || form.dataset.noLock === 'true') {
+    if (!(form instanceof HTMLFormElement) || form.dataset.noLock === 'true' || event.defaultPrevented) {
         return;
     }
 

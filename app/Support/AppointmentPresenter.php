@@ -12,8 +12,10 @@ class AppointmentPresenter
     public const STATUS_LABELS = [
         'pending' => 'Pending',
         'confirmed' => 'Confirmed',
+        'checked_in' => 'Checked in',
         'completed' => 'Completed',
         'cancelled' => 'Cancelled',
+        'no_show' => 'No-show',
     ];
 
     public const VISIT_LABELS = [
@@ -29,6 +31,7 @@ class AppointmentPresenter
             'id' => $appointment->id,
             'patient' => $appointment->patient?->name ?? 'Patient',
             'condition' => filled($appointment->reason) ? $appointment->reason : 'Not specified',
+            'visit' => self::VISIT_LABELS[$appointment->visit_type] ?? (filled($appointment->visit_type) ? ucfirst((string) $appointment->visit_type) : 'Visit'),
             'time' => self::time($appointment->appointment_time),
             'date' => self::date($appointment->appointment_date),
             'status' => self::STATUS_LABELS[$appointment->status] ?? ucfirst((string) $appointment->status),
@@ -98,12 +101,7 @@ class AppointmentPresenter
                 : null,
             'photo' => $appointment->doctor?->user?->photo,
             'initials' => self::initials($appointment->doctor?->user?->name ?? 'Doctor'),
-            'payment' => match ($appointment->payment_status) {
-                'paid' => 'Paid',
-                'unpaid' => 'Unpaid',
-                'failed' => 'Payment failed',
-                default => null,
-            },
+            'payment' => AppointmentPage::payment($appointment->payment_status)['label'],
             'can_cancel' => $appointment->canPatientCancel(),
             'reports' => $appointment->relationLoaded('reports')
                 ? self::reportGroups($appointment, 'patient.bookings.reports.show')
@@ -130,7 +128,7 @@ class AppointmentPresenter
             'type' => self::VISIT_LABELS[$appointment->visit_type] ?? ucfirst((string) $appointment->visit_type),
             'status' => self::STATUS_LABELS[$appointment->status] ?? ucfirst((string) $appointment->status),
             'status_value' => $appointment->status,
-            'can_update' => in_array($appointment->status, ['pending', 'confirmed'], true),
+            'can_update' => in_array($appointment->status, ['pending', 'confirmed', 'checked_in'], true),
         ];
     }
 

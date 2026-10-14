@@ -5,7 +5,6 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class UpdatePatientProfileRequest extends FormRequest
 {
@@ -51,7 +50,6 @@ class UpdatePatientProfileRequest extends FormRequest
             'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
             'bloodType' => ['nullable', 'string', 'max:20'],
             'photo' => ['nullable', 'image', 'max:2048'],
-            'password' => ['nullable', 'confirmed', Password::defaults()],
             'bp.value' => ['nullable', 'string', 'max:50'],
             'bp.known' => ['nullable'],
             'diabetic.value' => ['nullable', Rule::in(['yes', 'no'])],
