@@ -1,5 +1,5 @@
 {{-- Four benefits. These are product facts, not patient or rating counts. --}}
-<section class="page relative z-10 -mt-2 pb-4">
+<section class="page relative z-10 -mt-2 pb-10 lg:pb-14">
     <div class="grid gap-4 rounded-[20px] border border-line bg-white p-5 shadow-card sm:grid-cols-2 lg:grid-cols-4">
         @foreach ([
             ['icon' => 'user', 'title' => 'Qualified professionals', 'text' => 'Public profiles are limited to doctors the clinic has approved.'],

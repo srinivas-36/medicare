@@ -65,7 +65,7 @@
         <template x-for="review in reviews" :key="review.id">
             <article class="flex gap-4 border-b border-[#E2EAF4] py-5 last:border-b-0">
                 <template x-if="review.photo">
-                    <img :src="review.photo" alt="" class="h-10 w-10 shrink-0 rounded-full object-cover">
+                    <img :src="review.photo" alt="" class="h-10 w-10 shrink-0 rounded-full bg-[#F7FAFF] object-contain object-center">
                 </template>
                 <template x-if="!review.photo">
                     <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F2FF] text-xs font-semibold text-primary" x-text="review.initials"></span>

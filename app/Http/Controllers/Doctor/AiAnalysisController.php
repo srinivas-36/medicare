@@ -154,24 +154,21 @@ class AiAnalysisController extends Controller
             $analysis->refresh();
         }
 
+        $redirect = $request->input('return_to') === 'visit'
+            ? redirect()->route('doctor.appointments.show', $appointment)
+            : redirect()->route('doctor.appointments.analysis', [$appointment, $analysis]);
+
+        if ($analysis->status === 'failed') {
+            return $redirect;
+        }
+
         $message = match (true) {
             ! $started => 'An analysis is already running for this visit.',
             $analysis->status === 'completed' => 'Analysis ready for review.',
-            $analysis->status === 'failed' => $analysis->safeError() ?? 'The analysis could not be completed. You can retry.',
             default => 'Analysis started.',
         };
 
-        if ($request->input('return_to') === 'visit') {
-            $back = redirect()->route('doctor.appointments.show', $appointment);
-
-            return $analysis->status === 'failed'
-                ? $back->with('analysis_error', $message)
-                : $back->with('status', $message);
-        }
-
-        return redirect()
-            ->route('doctor.appointments.analysis', [$appointment, $analysis])
-            ->with('status', $message);
+        return $redirect->with('status', $message);
     }
 
     public function status(Request $request, Appointment $appointment, AiAnalysis $analysis): JsonResponse

@@ -144,6 +144,9 @@
             <path d="M20 12a8 8 0 1 1-2.3-5.6" stroke-linecap="round" />
             <path d="M20 4v5h-5" stroke-linecap="round" stroke-linejoin="round" />
             @break
+        @case('filter')
+            <path d="M4 5h16l-6.2 7.2V19l-3.6-1.8v-5L4 5Z" stroke-linecap="round" stroke-linejoin="round" />
+            @break
         @case('headset')
             <path d="M4 13a8 8 0 0 1 16 0" stroke-linecap="round" />
             <path d="M4 13v4a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2ZM20 13v4a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2Z" stroke-linejoin="round" />
@@ -152,6 +155,18 @@
             <rect x="6" y="4" width="12" height="16" rx="2" />
             <path d="M9 4.5h6V6a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4.5Z" stroke-linejoin="round" />
             <path d="M9 11h6M9 15h4" stroke-linecap="round" />
+            @break
+        @case('building')
+            <rect x="4" y="3" width="16" height="18" rx="1.5" />
+            <path d="M9 21v-4h6v4M8 7h.01M12 7h.01M16 7h.01M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01" stroke-linecap="round" />
+            @break
+        @case('paperclip')
+            <path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.6a4 4 0 0 1 5.6 5.7l-8.5 8.5a2 2 0 0 1-2.8-2.8l8.1-8.1" stroke-linecap="round" stroke-linejoin="round" />
+            @break
+        @case('more')
+            <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+            <circle cx="19" cy="12" r="1.25" fill="currentColor" stroke="none" />
             @break
         @case('settings')
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke-linejoin="round" />

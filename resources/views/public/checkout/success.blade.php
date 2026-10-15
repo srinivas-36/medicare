@@ -78,11 +78,11 @@
 @section('hide-footer', '1')
 
 @section('content')
-    <section class="relative overflow-hidden bg-[#F3F7FD] py-8 sm:py-12 lg:py-16">
+    <section class="relative overflow-hidden bg-[#F3F7FD] py-10 sm:py-14 lg:py-20">
         <div class="pointer-events-none absolute -right-28 top-16 h-[28rem] w-[28rem] rounded-full bg-[#E3EDF9]"></div>
         <div class="pointer-events-none absolute -left-24 bottom-10 h-72 w-72 rounded-full bg-[#EAF2FB]"></div>
 
-        <div class="relative mx-auto w-full max-w-[1280px] px-5">
+        <div class="page relative">
             <div class="rounded-[28px] border border-[#E7EEF6] bg-white p-5 shadow-[0_10px_40px_rgba(15,39,68,0.06)] sm:p-8">
                 <div class="grid items-stretch gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:gap-10">
                     <div class="flex flex-col items-center text-center lg:px-4 lg:py-4">

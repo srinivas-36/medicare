@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 
 class MedicalReportExtractor
 {
-    public const FILE_LIMIT = 4 * 1024 * 1024;
+    public const FILE_LIMIT = 8 * 1024 * 1024;
 
     public static function supported(AppointmentReport $report): bool
     {
@@ -60,7 +60,7 @@ class MedicalReportExtractor
         $disk = Storage::disk(MedicalFile::DISK)->exists($path) ? MedicalFile::DISK : 'public';
         $size = Storage::disk($disk)->size($path);
 
-        if ($size <= 0 || $size > self::FILE_LIMIT) {
+        if ($size <= 0) {
             return null;
         }
 
@@ -70,10 +70,71 @@ class MedicalReportExtractor
             return null;
         }
 
+        if ($size > self::FILE_LIMIT) {
+            if (! str_starts_with($mime, 'image/')) {
+                return null;
+            }
+
+            $shrunk = $this->shrink($contents);
+
+            if ($shrunk === null) {
+                return null;
+            }
+
+            return [
+                'mime' => 'image/jpeg',
+                'contents' => $shrunk,
+            ];
+        }
+
         return [
             'mime' => $mime,
             'contents' => $contents,
         ];
+    }
+
+    private function shrink(string $contents): ?string
+    {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) {
+            return null;
+        }
+
+        $image = @imagecreatefromstring($contents);
+
+        if ($image === false) {
+            return null;
+        }
+
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $longest = max($width, $height);
+        $limit = 1800;
+
+        if ($longest > $limit) {
+            $scale = $limit / $longest;
+            $target = imagecreatetruecolor(max(1, (int) round($width * $scale)), max(1, (int) round($height * $scale)));
+
+            if ($target === false) {
+                imagedestroy($image);
+
+                return null;
+            }
+
+            imagecopyresampled($target, $image, 0, 0, 0, 0, imagesx($target), imagesy($target), $width, $height);
+            imagedestroy($image);
+            $image = $target;
+        }
+
+        ob_start();
+        $written = imagejpeg($image, null, 75);
+        $jpeg = ob_get_clean();
+        imagedestroy($image);
+
+        if ($written !== true || ! is_string($jpeg) || $jpeg === '' || strlen($jpeg) > self::FILE_LIMIT) {
+            return null;
+        }
+
+        return $jpeg;
     }
 
     public static function mime(string $filename): ?string

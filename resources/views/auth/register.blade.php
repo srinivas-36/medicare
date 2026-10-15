@@ -3,7 +3,7 @@
 @section('title', 'Register')
 
 @section('content')
-    <section class="px-4 py-6 sm:px-6 sm:py-8">
+    <section class="px-5 py-10 sm:px-8 sm:py-14 lg:px-12 lg:py-16">
         <div class="surface mx-auto grid w-full max-w-7xl overflow-hidden lg:grid-cols-[minmax(380px,480px)_minmax(0,1fr)]">
             <div class="hidden h-full flex-col bg-primary px-8 py-8 text-white lg:flex">
                 <p class="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">Medicare</p>

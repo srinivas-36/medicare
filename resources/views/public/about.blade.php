@@ -11,7 +11,7 @@
     />
 
     <section class="py-16 lg:py-20">
-        <div class="mx-auto grid w-full max-w-[1100px] gap-6 px-5 md:grid-cols-3">
+        <div class="page grid gap-6 md:grid-cols-3">
             <article class="surface p-6">
                 <p class="text-sm font-semibold text-primary">Patients</p>
                 <h2 class="mt-2 text-xl font-bold text-heading">Book with a clear fee</h2>
@@ -31,7 +31,7 @@
     </section>
 
     <section class="pb-20">
-        <div class="mx-auto grid w-full max-w-[1100px] items-center gap-10 px-5 lg:grid-cols-2">
+        <div class="page grid items-center gap-10 lg:grid-cols-2">
             <div>
                 <h2 class="text-3xl font-extrabold tracking-tight text-heading">How a visit moves through Medicare</h2>
                 <ol class="mt-6 space-y-4">

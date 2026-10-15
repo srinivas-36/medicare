@@ -143,7 +143,7 @@
 
             @if (count($reports) > 0)
                 <div>
-                    <h3 class="text-xs font-semibold uppercase tracking-wide text-[#64748B]">Lab values</h3>
+                    <h3 class="text-xs font-semibold uppercase tracking-wide text-[#64748B]">Reports</h3>
                     <div class="mt-2 space-y-4">
                         @foreach ($reports as $report)
                             @php $url = $reportUrl($report['source_report_id'] ?? null); @endphp
@@ -154,6 +154,9 @@
                                         <a href="{{ $url }}" target="_blank" rel="noopener" class="text-xs font-semibold text-[#0067FF] no-underline">Open</a>
                                     @endif
                                 </div>
+                                @if (filled($report['narrative'] ?? null))
+                                    <p class="mt-1 leading-6 text-[#181A1E]">{{ $report['narrative'] }}</p>
+                                @endif
                                 @if (count($report['rows'] ?? []) > 0)
                                     <table class="mt-2 w-full text-left">
                                         <tbody class="divide-y divide-[#E2E8F0]">

@@ -26,7 +26,7 @@
 @endphp
 
 @if ($photoUrl)
-    <img src="{{ $photoUrl }}" alt="" {{ $attributes->merge(['class' => $sizeClass.' shrink-0 rounded-full object-cover']) }}>
+    <img src="{{ $photoUrl }}" alt="" {{ $attributes->merge(['class' => $sizeClass.' shrink-0 rounded-full bg-[#F7FAFF] object-contain object-center']) }}>
 @else
     <span {{ $attributes->merge(['class' => $sizeClass.' inline-flex shrink-0 items-center justify-center rounded-full font-semibold '.$toneClass]) }} aria-hidden="true">{{ $initials }}</span>
 @endif

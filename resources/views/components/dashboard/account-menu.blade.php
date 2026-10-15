@@ -36,8 +36,8 @@
         type="button"
         @class([
             'flex items-center gap-2.5 py-1 pl-1 text-left transition',
-            'pr-1' => $role === 'doctor',
-            'rounded-full border border-line bg-white pr-3 hover:border-primary/40' => $role !== 'doctor',
+            'pr-1' => in_array($role, ['doctor', 'patient'], true),
+            'rounded-full border border-line bg-white pr-3 hover:border-primary/40' => ! in_array($role, ['doctor', 'patient'], true),
         ])
         @click="open = !open"
         :aria-expanded="open ? 'true' : 'false'"

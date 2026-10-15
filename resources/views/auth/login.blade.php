@@ -3,7 +3,7 @@
 @section('title', 'Log in')
 
 @section('content')
-    <section class="px-5 py-16 lg:py-24">
+    <section class="px-5 py-16 sm:px-8 lg:px-12 lg:py-24">
         <div class="surface mx-auto w-full max-w-[480px] p-6 sm:p-10">
             <p class="text-sm font-semibold uppercase tracking-[0.14em] text-primary">Welcome back</p>
             <h1 class="mt-2 text-3xl font-extrabold tracking-tight text-heading">Log in to Medicare</h1>

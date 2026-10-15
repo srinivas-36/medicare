@@ -22,7 +22,7 @@
     $fileInput = 'mt-2 block w-full cursor-pointer rounded-lg border border-[#C5D9FF] bg-white px-3 py-2 text-sm text-body file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#0067FF] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white';
 @endphp
 
-<header class="mb-5">
+<header class="mb-4">
     <a href="{{ $backUrl }}" class="inline-flex items-center gap-1.5 text-sm font-semibold text-primary no-underline hover:text-primary-hover">
         <x-ui.icon name="chevron-left" class="h-4 w-4" />
         {{ $backLabel }}
@@ -44,7 +44,7 @@
 </header>
 
 <div class="grid items-start gap-5 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
-    <aside class="space-y-5 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-5.5rem)] lg:overflow-y-auto lg:pr-1">
+    <aside class="flex flex-col gap-4 lg:sticky lg:top-6 lg:z-10 lg:self-start">
         <section class="rounded-2xl border border-line bg-white p-5 shadow-card">
             <div class="flex items-center justify-between gap-3">
                 <h2 class="text-base font-semibold text-heading">Your doctor</h2>
@@ -56,16 +56,16 @@
             </div>
             <div class="mt-4 flex items-center gap-3">
                 @if ($person['photo'])
-                    <img src="{{ $person['photo'] }}" alt="{{ $person['name'] }}" class="h-14 w-14 rounded-full object-cover">
+                    <img src="{{ $person['photo'] }}" alt="{{ $person['name'] }}" class="h-12 w-12 rounded-full object-cover">
                 @else
-                    <span class="flex h-14 w-14 items-center justify-center rounded-full bg-light text-base font-bold text-primary">{{ $person['initials'] }}</span>
+                    <span class="flex h-12 w-12 items-center justify-center rounded-full bg-light text-sm font-bold text-primary">{{ $person['initials'] }}</span>
                 @endif
                 <div class="min-w-0">
-                    <p class="truncate text-base font-semibold text-heading">{{ $person['name'] ?: 'Doctor' }}</p>
+                    <p class="truncate text-sm font-semibold text-heading">{{ $person['name'] ?: 'Doctor' }}</p>
                     <p class="truncate text-sm text-body">{{ $person['specialization'] ?: 'Specialist' }}</p>
                 </div>
             </div>
-            <dl class="mt-5 space-y-3">
+            <dl class="mt-4 space-y-3">
                 <div class="flex items-center gap-3 text-sm text-body">
                     <x-ui.icon name="mail" class="h-4 w-4 shrink-0 text-muted" />
                     <dd class="min-w-0 truncate">{{ $person['email'] ?: 'Not provided' }}</dd>
@@ -90,9 +90,9 @@
             </div>
             <div class="mt-4 flex items-center gap-3">
                 <span class="flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700">{{ \App\Support\AppointmentPage::initials((string) ($record['name'] ?? ''), 'P') }}</span>
-                <p class="truncate text-base font-semibold text-heading">{{ $record['name'] ?: 'Patient' }}</p>
+                <p class="truncate text-sm font-semibold text-heading">{{ $record['name'] ?: 'Patient' }}</p>
             </div>
-            <dl class="mt-5 space-y-3">
+            <dl class="mt-4 space-y-3">
                 <div class="flex items-center gap-3 text-sm">
                     <x-ui.icon name="calendar" class="h-4 w-4 shrink-0 text-muted" />
                     <dt class="text-body">Age</dt>
@@ -119,10 +119,10 @@
             @if (count($booking['notes']) === 0)
                 <p class="mt-4 text-sm leading-6 text-body">No notes from the doctor yet.</p>
             @else
-                <div class="mt-4 space-y-4">
+                <div class="mt-4 space-y-3">
                     @foreach ($booking['notes'] as $note)
                         <div>
-                            <p class="whitespace-pre-line text-sm leading-6 text-ink">{{ $note['text'] }}</p>
+                            <p class="line-clamp-4 whitespace-pre-line text-sm leading-5 text-ink">{{ $note['text'] }}</p>
                             @if ($note['date'] !== '')
                                 <p class="mt-1 text-xs text-muted">{{ $note['date'] }}</p>
                             @endif

@@ -3,7 +3,7 @@
     Location is not a supported filter, so it is not shown.
 --}}
 <section class="bg-light">
-    <div class="page grid items-center gap-12 py-12 lg:grid-cols-2 lg:py-16">
+    <div class="page grid items-center gap-12 py-14 lg:grid-cols-2 lg:py-24">
         <div>
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Care that fits your life</p>
             <h1 class="mt-3 text-4xl font-extrabold leading-[1.12] tracking-tight text-navy sm:text-5xl lg:text-[56px]">
@@ -57,9 +57,9 @@
                 <img
                     src="{{ asset('images/hero-img02.png') }}"
                     alt=""
-                    width="640"
-                    height="760"
-                    class="h-[420px] w-full object-cover object-top sm:h-[480px]"
+                    width="270"
+                    height="270"
+                    class="aspect-square w-full object-contain object-center"
                 >
             </div>
         </div>

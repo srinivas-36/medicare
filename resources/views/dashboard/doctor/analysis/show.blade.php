@@ -172,7 +172,7 @@
                 Decision support only. Review findings before adding anything to the visit note.
             </p>
 
-            @if (session('status'))
+            @if (session('status') && ! str_contains((string) session('status'), 'did not return a result'))
                 <p class="mb-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-sm text-[#15803D]">{{ session('status') }}</p>
             @endif
 
@@ -198,7 +198,7 @@
                     @endif
 
                     @if (! $open)
-                        <details class="rounded-xl border border-[#E2E8F0] bg-white shadow-card" @if (! $completed && ! $failed && ! $legacy) open @endif>
+                        <details class="rounded-xl border border-[#E2E8F0] bg-white shadow-card" @if (request()->boolean('regenerate') || (! $completed && ! $failed && ! $legacy)) open @endif>
                             <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-[#181A1E]">{{ $completed || $failed ? 'Generate again' : 'Review information before analysis' }}</summary>
                             <form method="POST" action="{{ route('doctor.appointments.analysis.store', $appointment) }}" class="space-y-4 border-t border-[#E2E8F0] px-4 py-4" @submit="begin()">
                                 @csrf

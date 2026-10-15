@@ -2,6 +2,10 @@
 
 @php
     $name = $patient->name ?? 'Patient';
+    $clinician = [
+        'name' => auth()->user()?->name ?? 'Doctor',
+        'specialty' => auth()->user()?->doctor?->specialization,
+    ];
     $visits = $visits ?? [];
     $profile = $profile ?? null;
     $chartId = $chartId ?? null;
@@ -213,6 +217,7 @@
             'visits' => $actionVisits,
         ]))"
         @keydown.escape.window="menu = false; reportsOpen = false; if (action) closeAction()"
+        @chart-action="visitId = String($event.detail.id); openAction($event.detail.name)"
     >
         @if (session('status'))
             <p class="mb-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm font-medium text-success">{{ session('status') }}</p>
@@ -517,7 +522,7 @@
                         <h2 class="text-[15px] font-semibold text-[#181A1E]">Recent Consultations</h2>
                         <button type="button" class="text-sm font-semibold text-[#0067FF]" @click="tab = 'consultations'">View All</button>
                     </div>
-                    @include('dashboard.doctor.patients.partials.consultations', ['rows' => array_slice($consultations, 0, 2)])
+                    @include('dashboard.doctor.patients.partials.consultations', ['rows' => array_slice($consultations, 0, 4)])
                 </section>
 
                 <section class="dash-panel p-4 sm:p-5">
@@ -537,9 +542,20 @@
             @include('dashboard.doctor.patients.partials.visits', ['rows' => $visits, 'statusClass' => $statusClass])
         </section>
 
-        <section x-show="tab === 'consultations'" x-cloak class="dash-panel p-4 sm:p-5">
-            <h2 class="text-[15px] font-semibold text-[#181A1E]">Consultations</h2>
-            @include('dashboard.doctor.patients.partials.consultations', ['rows' => $consultations])
+        <section x-show="tab === 'consultations'" x-cloak class="dash-panel">
+            <div class="flex items-center justify-between gap-3 border-b border-[#F1F5F9] px-4 py-3 sm:px-5">
+                <div class="flex min-w-0 items-center gap-2">
+                    <h2 class="text-[15px] font-semibold text-[#181A1E]">Consultations</h2>
+                    @if ($consultations !== [])
+                        <span class="inline-flex rounded-full bg-[#F1F5F9] px-2 py-0.5 text-xs font-medium text-[#64748B]">{{ count($consultations) }} {{ \Illuminate\Support\Str::plural('note', count($consultations)) }}</span>
+                    @endif
+                </div>
+                <a href="{{ route('doctor.patients.create', ['patient_id' => $patient->id]) }}" class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[#0067FF] px-3.5 text-sm font-semibold text-white no-underline hover:bg-[#0052CC]">
+                    <x-ui.icon name="plus" class="h-4 w-4" />
+                    New consultation
+                </a>
+            </div>
+            @include('dashboard.doctor.patients.partials.consultations', ['rows' => $consultations, 'cards' => true, 'clinician' => $clinician])
         </section>
 
         <section x-show="tab === 'reports'" x-cloak class="dash-panel p-4 sm:p-5">

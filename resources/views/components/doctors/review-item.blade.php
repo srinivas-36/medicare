@@ -10,8 +10,8 @@ $rating = (int) data_get($review, 'rating', 0);
 
 <div class="mb-[30px] flex justify-between gap-10">
     <div class="flex gap-3">
-        <figure class="h-10 w-10 rounded-full">
-            <img src="{{ $photoUrl }}" alt="{{ $name }}" class="w-full">
+        <figure class="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#F7FAFF]">
+            <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-full w-full object-contain object-center">
         </figure>
         <div>
             <h5 class="text-[16px] font-bold leading-6 text-[#1769FF]">{{ $name }}</h5>

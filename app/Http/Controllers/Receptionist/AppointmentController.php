@@ -10,9 +10,9 @@ use App\Models\Doctor;
 use App\Models\User;
 use App\Services\AppointmentBooking;
 use App\Support\AppointmentPresenter;
+use App\Support\ClinicSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -93,18 +93,9 @@ class AppointmentController extends Controller
         }
 
         $doctor->load(['user', 'timeSlots']);
-        $openSlots = $this->booking->calendar($doctor);
         $duration = max(5, (int) ($doctor->appointment_duration ?: AppointmentBooking::INTERVAL_MINUTES));
-        $slots = $doctor->timeSlots
-            ->filter(fn ($slot) => $slot->is_available)
-            ->map(fn ($slot) => [
-                'day' => strtolower((string) $slot->day),
-                'startingTime' => substr(AppointmentBooking::normalizeTime((string) $slot->starting_time), 0, 5),
-                'endingTime' => substr(AppointmentBooking::normalizeTime((string) $slot->ending_time), 0, 5),
-            ])
-            ->sortBy('startingTime')
-            ->values()
-            ->all();
+        $hours = ClinicSchedule::hours($doctor);
+        $days = ClinicSchedule::days($doctor, $this->booking, $hours);
 
         $minDate = now()->toDateString();
         $maxDate = AppointmentBooking::bookableUntil()->toDateString();
@@ -114,53 +105,23 @@ class AppointmentController extends Controller
             $selectedDate = '';
         }
 
+        if ($selectedDate === '' || ! isset($days[$selectedDate])) {
+            $selectedDate = ClinicSchedule::firstOpenDate($days);
+        }
+
         $selectedSlot = (string) old('slot', '');
 
         if ($selectedSlot === '' && is_string(old('starting_time')) && is_string(old('ending_time'))) {
             $selectedSlot = old('starting_time').'|'.old('ending_time');
         }
 
-        $search = $request->string('q')->toString();
-        $patients = collect();
-
-        if ($search !== '') {
-            $patients = User::query()
-                ->where('role', 'patient')
-                ->where(function ($query) use ($search) {
-                    $query->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%')
-                        ->orWhere('phone', 'like', '%'.$search.'%');
-                })
-                ->orderBy('name')
-                ->limit(20)
-                ->get();
-        }
-
+        $search = trim($request->string('q')->toString());
         $selectedPatientId = (string) old('patient_id', $request->input('patient_id', ''));
-
-        if ($selectedPatientId !== '' && $patients->doesntContain('id', (int) $selectedPatientId)) {
-            $selected = User::query()->where('role', 'patient')->find($selectedPatientId);
-
-            if ($selected) {
-                $patients->prepend($selected);
-            }
-        }
-
-        $order = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-        $hours = collect($slots)
-            ->sortBy(fn (array $slot) => array_search($slot['day'], $order, true) ?: 0)
-            ->map(fn (array $slot) => [
-                'day' => ucfirst($slot['day']),
-                'weekday' => $slot['day'],
-                'start' => $slot['startingTime'],
-                'end' => $slot['endingTime'],
-                'from' => Carbon::parse($slot['startingTime'])->format('g:i A'),
-                'to' => Carbon::parse($slot['endingTime'])->format('g:i A'),
-            ])
-            ->values()
-            ->all();
-
-        $month = $this->visibleMonth($request->input('month'), $selectedDate, $minDate, $maxDate);
+        $roster = ClinicSchedule::patients(null, $selectedPatientId);
+        $patients = $search !== ''
+            ? ClinicSchedule::patients($search, $selectedPatientId)
+            : $roster;
+        $month = ClinicSchedule::visibleMonth($request->input('month'), $selectedDate, $minDate, $maxDate);
 
         return view('dashboard.receptionist.appointments.create', [
             'doctorName' => $doctor->user?->name ?? 'Your doctor',
@@ -170,13 +131,9 @@ class AppointmentController extends Controller
             'desk' => [
                 'searchUrl' => route('receptionist.patients.search'),
                 'query' => $search,
-                'searched' => $request->filled('q'),
-                'patients' => $patients->map(fn (User $patient) => [
-                    'id' => $patient->id,
-                    'name' => $patient->name,
-                    'email' => $patient->email,
-                    'phone' => $patient->phone,
-                ])->values()->all(),
+                'searched' => $search !== '',
+                'roster' => $roster,
+                'patients' => $patients,
                 'patientId' => $selectedPatientId,
                 'patientMode' => old('patient_mode', $request->input('mode') === 'new' ? 'new' : 'existing'),
                 'newName' => old('name', ''),
@@ -186,7 +143,7 @@ class AppointmentController extends Controller
                 'newGender' => old('gender', ''),
                 'date' => $selectedDate,
                 'slot' => $selectedSlot,
-                'days' => $this->groupedVisits($openSlots, $hours),
+                'days' => $days,
                 'minDate' => $minDate,
                 'maxDate' => $maxDate,
                 'month' => $month->format('Y-m'),
@@ -210,12 +167,12 @@ class AppointmentController extends Controller
         $data = $request->validated();
         $doctor->load('user');
 
-        $appointment = DB::transaction(function () use ($request, $doctor, $data) {
+        $patient = DB::transaction(function () use ($request, $doctor, $data) {
             $patient = $data['patient_mode'] === 'new'
                 ? $this->patientFromForm($data)
                 : User::query()->where('role', 'patient')->findOrFail($data['patient_id']);
 
-            return $this->booking->confirmWindow(
+            $this->booking->confirmWindow(
                 patient: $patient,
                 doctor: $doctor,
                 date: $data['date'],
@@ -225,6 +182,8 @@ class AppointmentController extends Controller
                 visitType: $data['visit_type'],
                 bookedBy: $request->user(),
             );
+
+            return $patient;
         });
 
         return redirect()
@@ -321,122 +280,6 @@ class AppointmentController extends Controller
         $this->booking->reschedule($appointment, $request->user(), $data['date'], $data['time'], $data['reason'] ?? null);
 
         return back()->with('status', 'Appointment rescheduled.');
-    }
-
-    /**
-     * @param  array<string, list<array{start: string, end: string}>>  $openSlots
-     * @param  list<array{weekday: string, start: string, end: string, from: string, to: string}>  $hours
-     * @return array<string, list<array{period: string, range: string, slots: list<array{value: string, label: string, endLabel: string}>}>>
-     */
-    private function groupedVisits(array $openSlots, array $hours): array
-    {
-        $days = [];
-
-        foreach ($openSlots as $date => $slots) {
-            $weekday = strtolower(Carbon::parse($date)->format('l'));
-            $periods = array_values(array_filter(
-                $hours,
-                fn (array $hour) => $hour['weekday'] === $weekday,
-            ));
-            $groups = [];
-            $used = [];
-
-            foreach ($periods as $period) {
-                $matches = [];
-
-                foreach ($slots as $index => $slot) {
-                    if ($slot['start'] >= $period['start'] && $slot['end'] <= $period['end']) {
-                        $matches[] = $this->visitChoice($slot);
-                        $used[$index] = true;
-                    }
-                }
-
-                if ($matches === []) {
-                    continue;
-                }
-
-                $groups[] = [
-                    'period' => $this->periodName($period['start']),
-                    'range' => $period['from'].' – '.$period['to'],
-                    'slots' => $matches,
-                ];
-            }
-
-            $rest = [];
-
-            foreach ($slots as $index => $slot) {
-                if (! isset($used[$index])) {
-                    $rest[] = $this->visitChoice($slot);
-                }
-            }
-
-            if ($rest !== []) {
-                $groups[] = [
-                    'period' => 'Open',
-                    'range' => '',
-                    'slots' => $rest,
-                ];
-            }
-
-            if ($groups !== []) {
-                $days[$date] = $groups;
-            }
-        }
-
-        return $days;
-    }
-
-    /**
-     * @param  array{start: string, end: string}  $slot
-     * @return array{value: string, label: string, endLabel: string}
-     */
-    private function visitChoice(array $slot): array
-    {
-        return [
-            'value' => $slot['start'].'|'.$slot['end'],
-            'label' => Carbon::parse($slot['start'])->format('g:i A'),
-            'endLabel' => Carbon::parse($slot['end'])->format('g:i A'),
-        ];
-    }
-
-    private function periodName(string $start): string
-    {
-        $hour = (int) substr($start, 0, 2);
-
-        if ($hour < 12) {
-            return 'Morning';
-        }
-
-        if ($hour < 17) {
-            return 'Afternoon';
-        }
-
-        return 'Evening';
-    }
-
-    private function visibleMonth(mixed $month, string $selectedDate, string $minDate, string $maxDate): Carbon
-    {
-        $parsed = null;
-
-        if (is_string($month) && preg_match('/^\d{4}-\d{2}$/', $month)) {
-            $parsed = Carbon::createFromFormat('Y-m-d', $month.'-01');
-        } elseif ($selectedDate !== '') {
-            $parsed = Carbon::parse($selectedDate);
-        }
-
-        $visible = ($parsed ?: now())->copy()->startOfMonth();
-        $earliest = Carbon::parse($minDate)->startOfMonth();
-        $latest = Carbon::parse($maxDate)->startOfMonth();
-
-        if ($visible->lt($earliest)) {
-            return $earliest;
-        }
-
-        if ($visible->gt($latest)) {
-            return $latest;
-        }
-
-        return $visible;
     }
 
     private function clinic(Request $request): ?Doctor

@@ -8,9 +8,14 @@ export function registerConfirmDialog() {
     root.innerHTML = `
         <button type="button" class="confirm-dialog__backdrop" data-confirm-dismiss tabindex="-1" aria-label="Close"></button>
         <div class="confirm-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message" tabindex="-1">
-            <div class="confirm-dialog__icon" data-confirm-icon></div>
-            <h2 id="confirm-dialog-title" class="confirm-dialog__title"></h2>
-            <p id="confirm-dialog-message" class="confirm-dialog__message"></p>
+            <div class="confirm-dialog__head">
+                <div class="confirm-dialog__icon" data-confirm-icon></div>
+                <div class="min-w-0">
+                    <h2 id="confirm-dialog-title" class="confirm-dialog__title"></h2>
+                    <p id="confirm-dialog-message" class="confirm-dialog__message"></p>
+                </div>
+            </div>
+            <dl class="confirm-dialog__summary" data-confirm-summary hidden></dl>
             <p class="confirm-dialog__detail" data-confirm-detail hidden></p>
             <div class="confirm-dialog__actions">
                 <button type="button" class="btn-secondary" data-confirm-dismiss>Go back</button>
@@ -22,6 +27,7 @@ export function registerConfirmDialog() {
     const title = root.querySelector('#confirm-dialog-title');
     const message = root.querySelector('#confirm-dialog-message');
     const detail = root.querySelector('[data-confirm-detail]');
+    const summary = root.querySelector('[data-confirm-summary]');
     const icon = root.querySelector('[data-confirm-icon]');
     const accept = root.querySelector('[data-confirm-accept]');
     const panel = root.querySelector('.confirm-dialog__panel');
@@ -79,8 +85,26 @@ export function registerConfirmDialog() {
 
         title.textContent = options.title || 'Please confirm';
         message.textContent = options.message || '';
-        detail.textContent = options.detail || '';
-        detail.hidden = !options.detail;
+        message.hidden = !message.textContent;
+        const rows = Array.isArray(options.rows)
+            ? options.rows.filter((row) => row && String(row.value || '').trim() !== '')
+            : [];
+        summary.replaceChildren();
+        rows.forEach((row) => {
+            const item = document.createElement('div');
+            item.className = 'confirm-dialog__row';
+            const label = document.createElement('dt');
+            const value = document.createElement('dd');
+            label.className = 'confirm-dialog__label';
+            value.className = 'confirm-dialog__value';
+            label.textContent = row.label || '';
+            value.textContent = String(row.value);
+            item.append(label, value);
+            summary.append(item);
+        });
+        summary.hidden = rows.length === 0;
+        detail.textContent = rows.length === 0 ? (options.detail || '') : '';
+        detail.hidden = detail.textContent === '';
         icon.innerHTML = tone === 'danger' ? ALERT_ICON : CHECK_ICON;
         icon.dataset.tone = tone;
         accept.textContent = options.confirmLabel || 'Confirm';

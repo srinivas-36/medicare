@@ -12,8 +12,8 @@
 @endphp
 
 @section('content')
-    <section class="py-10 lg:py-16">
-        <div class="mx-auto max-w-[1170px] px-5">
+    <section class="py-12 lg:py-20">
+        <div class="page">
             @if (empty($doctor))
                 <div class="surface px-6 py-16 text-center">
                     <h1 class="text-2xl font-bold text-heading">Doctor not found</h1>

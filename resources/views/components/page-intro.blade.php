@@ -5,7 +5,7 @@
 @props(['eyebrow' => null, 'title', 'subtitle' => null])
 
 <section class="border-b border-line bg-light">
-    <div class="page py-12 text-center lg:py-16">
+    <div class="page py-14 text-center lg:py-20">
         @if ($eyebrow)
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{{ $eyebrow }}</p>
         @endif

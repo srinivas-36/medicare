@@ -167,6 +167,14 @@ class DashboardWorkspaceTest extends TestCase
             ->assertOk()
             ->assertSee('Find a Doctor')
             ->assertSee('Next appointment')
+            ->assertSee('Welcome back, Booker')
+            ->assertSee('Manage your care and upcoming visits in one place.')
+            ->assertSee('Book an appointment')
+            ->assertSee('Upcoming appointments')
+            ->assertSee('Recent visits')
+            ->assertSee('Updates & notifications', false)
+            ->assertSee('Search doctors, specialties...')
+            ->assertSee('Contact our support team for any assistance.')
             ->assertDontSee('name="appointment_date"', false);
 
         $this->actingAs($patient)

@@ -15,8 +15,10 @@ class DashboardController extends Controller
         $user = $request->user();
         abort_unless($user->role === 'patient', 403);
 
+        $withDoctor = ['doctor.user', 'doctor.experiences'];
+
         $next = $user->appointmentsAsPatient()
-            ->with('doctor.user')
+            ->with($withDoctor)
             ->whereIn('status', ['pending', 'confirmed', 'checked_in'])
             ->upcoming()
             ->orderBy('appointment_date')
@@ -24,23 +26,23 @@ class DashboardController extends Controller
             ->first();
 
         $upcoming = $user->appointmentsAsPatient()
-            ->with('doctor.user')
+            ->with($withDoctor)
             ->whereIn('status', ['pending', 'confirmed', 'checked_in'])
             ->upcoming()
             ->when($next, fn ($query) => $query->whereKeyNot($next->id))
             ->orderBy('appointment_date')
             ->orderBy('appointment_time')
-            ->limit(4)
+            ->limit(3)
             ->get()
             ->map(fn (Appointment $appointment) => AppointmentPresenter::patient($appointment))
             ->all();
 
         $previous = $user->appointmentsAsPatient()
-            ->with(['doctor.user', 'consultation'])
+            ->with([...$withDoctor, 'consultation'])
             ->where('status', 'completed')
             ->orderByDesc('appointment_date')
             ->orderByDesc('appointment_time')
-            ->limit(4)
+            ->limit(3)
             ->get()
             ->map(fn (Appointment $appointment) => AppointmentPresenter::patient($appointment))
             ->all();
@@ -53,7 +55,10 @@ class DashboardController extends Controller
                 'title' => $notification->data['title'] ?? 'Update',
                 'body' => $notification->data['body'] ?? '',
                 'url' => route('account.notifications.read', $notification->id),
-                'when' => $notification->created_at?->diffForHumans(),
+                'when' => $notification->created_at
+                    ? $notification->created_at->timezone('Asia/Kolkata')->format('d M Y, g:i A').' IST'
+                    : null,
+                'unread' => $notification->read_at === null,
             ])
             ->all();
 
@@ -66,7 +71,8 @@ class DashboardController extends Controller
                 'title' => 'Referral to '.($referral->toDoctor?->user?->name ?? 'a doctor'),
                 'body' => ucfirst((string) $referral->status),
                 'url' => route('patient.history'),
-                'when' => $referral->created_at?->diffForHumans(),
+                'when' => $referral->created_at?->format('d M Y, g:i A'),
+                'unread' => false,
             ])
             ->all();
 

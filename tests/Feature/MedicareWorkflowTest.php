@@ -122,7 +122,9 @@ class MedicareWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Earlier headache')
             ->assertSee('Tension headache')
-            ->assertSee('Return visit');
+            ->assertSee('Return visit')
+            ->assertSee('View visit details')
+            ->assertSee('Review past visits, symptoms, and reports in one place.');
 
         $this->actingAs($patient)
             ->get(route('patient.history.show', $first))

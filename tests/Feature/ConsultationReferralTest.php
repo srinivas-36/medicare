@@ -770,7 +770,7 @@ class ConsultationReferralTest extends TestCase
         $this->actingAs($fromUser)
             ->get(route('doctor.referrals.show', $referral))
             ->assertOk()
-            ->assertSee('Waiting for Dr Noah Shah')
+            ->assertSee('Awaiting response from Dr Noah Shah')
             ->assertSee('Is this cardiac?')
             ->assertDontSee('name="decline_reason"', false);
 
@@ -932,11 +932,84 @@ class ConsultationReferralTest extends TestCase
             ->assertOk()
             ->assertSee('Please assess this chest pain.')
             ->assertSee('Is this angina?')
-            ->assertSee('Patient summary')
+            ->assertSee('AI-assisted patient summary')
             ->assertSee('for Chest pain and palpitations')
             ->assertSee('Reports')
             ->assertSee('No reports were attached to this referral.')
-            ->assertSee('Waiting for Dr Ananya Iyer');
+            ->assertSee('Awaiting response from Dr Ananya Iyer');
+    }
+
+    public function test_sample_referrals_keep_the_patient_details_and_summary_from_send_time(): void
+    {
+        [$doctorUser, $doctor] = $this->makeDoctor('Dr Maya Chen', 'Cardiology');
+        $patient = $this->makePatient('Amina Rahman', ['gender' => 'female']);
+        PatientProfile::query()->create([
+            'user_id' => $patient->id,
+            'age' => 42,
+            'health_notes' => [
+                'bp' => ['known' => true, 'value' => '128/82'],
+                'diabetic' => ['known' => false, 'value' => ''],
+                'hyperthyroidism' => ['known' => false, 'value' => ''],
+            ],
+        ]);
+        $appointment = $this->appointment($patient, $doctor, [
+            'status' => 'confirmed',
+            'reason' => 'Chest pain and palpitations',
+        ]);
+        $recipient = collect(MockReferralDirectory::doctors())->firstWhere('name', 'Dr Ananya Iyer');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.referrals.preview', 'sample-in-meera'))
+            ->assertOk()
+            ->assertSee('Meera Joshi')
+            ->assertSee('46 years')
+            ->assertSee('Female')
+            ->assertSee('Joint & Spine Care')
+            ->assertSee('AI-assisted patient summary')
+            ->assertSee('Reviewed and approved')
+            ->assertSee('knee pain after a fall')
+            ->assertSee('Blood Test Reports')
+            ->assertSee('Hemoglobin (Hb)')
+            ->assertSee('15.2 g/dL')
+            ->assertSee('Current lab results for this episode are not available.');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.referrals.preview', 'sample-out-ananya'))
+            ->assertOk()
+            ->assertSee('Rahul Menon')
+            ->assertSee('58 years')
+            ->assertSee('Male')
+            ->assertSee('Blood pressure 148/92')
+            ->assertSee('City Heart Clinic')
+            ->assertSee('Dr Ananya Iyer')
+            ->assertSee('Awaiting response from Dr Ananya Iyer')
+            ->assertSee('Hemoglobin (Hb)')
+            ->assertSee('These results are from a prior visit.');
+
+        $id = $this->actingAs($doctorUser)
+            ->postJson(route('doctor.referrals.preview.store', $appointment), [
+                'to_doctor_id' => $recipient['id'],
+                'reason' => 'Please assess this chest pain.',
+            ])
+            ->assertOk()
+            ->json('referral.id');
+
+        $patient->patient_profile->update([
+            'age' => 70,
+            'health_notes' => [
+                'bp' => ['known' => true, 'value' => '90/60'],
+            ],
+        ]);
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.referrals.preview', $id))
+            ->assertOk()
+            ->assertSee('42 years')
+            ->assertSee('Female')
+            ->assertSee('128/82')
+            ->assertSee('for Chest pain and palpitations')
+            ->assertDontSee('70 years')
+            ->assertDontSee('90/60');
     }
 
     /**

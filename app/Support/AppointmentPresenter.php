@@ -101,6 +101,8 @@ class AppointmentPresenter
                 : null,
             'photo' => $appointment->doctor?->user?->photo,
             'initials' => self::initials($appointment->doctor?->user?->name ?? 'Doctor'),
+            'clinic' => self::clinic($appointment),
+            'mode' => 'In-person visit',
             'payment' => AppointmentPage::payment($appointment->payment_status)['label'],
             'can_cancel' => $appointment->canPatientCancel(),
             'reports' => $appointment->relationLoaded('reports')
@@ -165,6 +167,24 @@ class AppointmentPresenter
             })
             ->values()
             ->all();
+    }
+
+    private static function clinic(Appointment $appointment): ?string
+    {
+        $doctor = $appointment->doctor;
+
+        if ($doctor === null || ! $doctor->relationLoaded('experiences')) {
+            return null;
+        }
+
+        $current = $doctor->experiences->firstWhere('is_current', true)
+            ?? $doctor->experiences->sortByDesc('id')->first();
+
+        $label = collect([$current?->hospital_name, $current?->location])
+            ->filter(fn ($part) => filled($part))
+            ->implode(', ');
+
+        return $label !== '' ? $label : null;
     }
 
     private static function initials(string $name): string

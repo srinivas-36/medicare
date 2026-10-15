@@ -58,7 +58,7 @@ class PatientController extends Controller
                     ->orWhere('phone', 'like', '%'.$term.'%');
             })
             ->orderBy('name')
-            ->limit(8)
+            ->limit(20)
             ->get(['id', 'name', 'email', 'phone']);
 
         return response()->json([

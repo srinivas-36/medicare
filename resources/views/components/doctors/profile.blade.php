@@ -8,7 +8,7 @@
 @endphp
 
 <div class="surface flex flex-col gap-6 p-6 sm:flex-row sm:items-start sm:p-8">
-    <img src="{{ $photoUrl }}" alt="{{ data_get($doctor, 'name') }}" class="h-40 w-40 shrink-0 rounded-3xl object-cover ring-4 ring-[#EAF3FF]">
+    <img src="{{ $photoUrl }}" alt="{{ data_get($doctor, 'name') }}" class="h-48 w-48 shrink-0 rounded-3xl bg-[#F7FAFF] object-contain object-center ring-4 ring-[#EAF3FF]">
 
     <div class="min-w-0">
         <span class="inline-flex rounded-full bg-[#DDF8F1] px-3 py-1 text-sm font-semibold text-iris">

@@ -127,21 +127,36 @@
         </nav>
 
     <div class="shrink-0 border-t border-[#E7EEF6] p-3">
-        <a href="{{ route('contact') }}" title="Contact support" class="sidebar-help flex items-center gap-3 rounded-2xl border border-[#D9E6FF] bg-[#F3F8FF] px-3 py-3 no-underline transition hover:border-[#0067FF]/30">
-            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#0067FF] shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-                <x-ui.icon name="headset" class="h-4 w-4" />
-            </span>
-            <span class="sidebar-label min-w-0 flex-1">
-                <span class="block text-sm font-semibold text-[#181A1E]">Need help?</span>
-                <span class="block text-xs text-[#64748B]">Contact support</span>
-            </span>
-            <x-ui.icon name="chevron-right" class="sidebar-help-chevron h-4 w-4 shrink-0 text-[#94A3B8]" />
-        </a>
+        @if ($role === 'patient')
+            <div class="sidebar-support rounded-2xl border border-[#E3EDF8] bg-[#F4F8FF] p-4">
+                <a href="{{ route('contact') }}" title="Contact support" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#0067FF] shadow-[0_1px_2px_rgba(15,23,42,0.06)] no-underline">
+                    <x-ui.icon name="headset" class="h-5 w-5" />
+                </a>
+                <p class="sidebar-label mt-3 text-sm font-semibold text-[#181A1E]">Need help?</p>
+                <p class="sidebar-label mt-1 text-xs leading-5 text-[#64748B]">Contact our support team for any assistance.</p>
+                <a href="{{ route('contact') }}" class="sidebar-label mt-3 inline-flex h-9 w-full items-center justify-center rounded-lg border border-[#D7E3F4] bg-white text-sm font-semibold text-[#181A1E] no-underline transition hover:border-[#0067FF]/40">Contact Support</a>
+            </div>
+        @else
+            <a href="{{ route('contact') }}" title="Contact support" class="sidebar-help flex items-center gap-3 rounded-2xl border border-[#D9E6FF] bg-[#F3F8FF] px-3 py-3 no-underline transition hover:border-[#0067FF]/30">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#0067FF] shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
+                    <x-ui.icon name="headset" class="h-4 w-4" />
+                </span>
+                <span class="sidebar-label min-w-0 flex-1">
+                    <span class="block text-sm font-semibold text-[#181A1E]">Need help?</span>
+                    <span class="block text-xs text-[#64748B]">Contact support</span>
+                </span>
+                <x-ui.icon name="chevron-right" class="sidebar-help-chevron h-4 w-4 shrink-0 text-[#94A3B8]" />
+            </a>
+        @endif
         <form method="POST" action="{{ route('logout') }}" class="mt-2">
             @csrf
-            <button type="submit" title="Log out" class="sidebar-link flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-[13px] font-semibold text-[#B91C1C] transition hover:bg-red-50">
+            <button type="submit" title="{{ $role === 'patient' ? 'Logout' : 'Log out' }}" @class([
+                'sidebar-link flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-[13px] font-semibold transition hover:bg-red-50',
+                'text-[#DC2626]' => $role === 'patient',
+                'text-[#B91C1C]' => $role !== 'patient',
+            ])>
                 <x-ui.icon name="logout" class="h-4 w-4 shrink-0" />
-                <span class="sidebar-label min-w-0 flex-1 truncate text-left">Log out</span>
+                <span class="sidebar-label min-w-0 flex-1 truncate text-left">{{ $role === 'patient' ? 'Logout' : 'Log out' }}</span>
             </button>
         </form>
     </div>

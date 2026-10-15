@@ -84,7 +84,7 @@ return [
                 [
                     'label' => 'Care',
                     'links' => [
-                        ['label' => 'Dashboard', 'route' => 'patient.dashboard', 'icon' => 'grid'],
+                        ['label' => 'Dashboard', 'route' => 'patient.dashboard', 'icon' => 'home'],
                         [
                             'label' => 'Find a Doctor',
                             'route' => 'patient.book',
@@ -92,7 +92,7 @@ return [
                             'active' => ['patient.book', 'patient.book.create'],
                         ],
                         ['label' => 'My Appointments', 'route' => 'patient.bookings', 'icon' => 'calendar'],
-                        ['label' => 'Medical History', 'route' => 'patient.history', 'icon' => 'file'],
+                        ['label' => 'Medical History', 'route' => 'patient.history', 'icon' => 'clipboard'],
                     ],
                 ],
                 [

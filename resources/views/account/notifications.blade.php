@@ -27,7 +27,9 @@
                             @endunless
                         </span>
                         <span class="mt-0.5 block text-sm text-body">{{ $notification->data['body'] ?? '' }}</span>
-                        <span class="mt-1 block text-xs text-muted">{{ $notification->created_at?->diffForHumans() }}</span>
+                        @if ($notification->created_at)
+                            <time class="mt-1 block text-xs text-muted" datetime="{{ $notification->created_at->timezone('Asia/Kolkata')->toIso8601String() }}">{{ $notification->created_at->timezone('Asia/Kolkata')->format('d M Y, g:i A') }} IST</time>
+                        @endif
                     </span>
                 </a>
             </li>

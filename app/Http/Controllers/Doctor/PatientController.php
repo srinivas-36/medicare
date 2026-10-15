@@ -10,6 +10,7 @@ use App\Models\Doctor;
 use App\Models\User;
 use App\Services\AppointmentBooking;
 use App\Support\AppointmentPresenter;
+use App\Support\ClinicSchedule;
 use App\Support\PatientRoster;
 use App\Support\ReferralDesk;
 use App\Support\ReferralSuggestions;
@@ -128,27 +129,58 @@ class PatientController extends Controller
         $doctor = $this->doctor($request);
         $doctor->load(['user', 'timeSlots']);
 
-        $selectedDate = old('date', $request->input('date', now()->toDateString()));
+        $minDate = now()->toDateString();
+        $maxDate = AppointmentBooking::bookableUntil()->toDateString();
+        $hours = ClinicSchedule::hours($doctor);
+        $days = ClinicSchedule::days($doctor, $this->booking, $hours);
+        $selectedDate = (string) old('date', $request->input('date', ''));
 
-        if (! is_string($selectedDate)) {
-            $selectedDate = now()->toDateString();
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedDate) || $selectedDate < $minDate || $selectedDate > $maxDate) {
+            $selectedDate = '';
         }
 
-        $schedule = $this->booking->calendar($doctor);
-        $selectedPatient = null;
-        $selectedId = old('patient_id');
-
-        if (is_numeric($selectedId)) {
-            $selectedPatient = User::query()->where('role', 'patient')->find($selectedId);
+        if ($selectedDate === '' || ! isset($days[$selectedDate])) {
+            $selectedDate = ClinicSchedule::firstOpenDate($days);
         }
+
+        $selectedSlot = (string) old('slot', '');
+
+        if ($selectedSlot === '' && is_string(old('time')) && old('time') !== '') {
+            $selectedSlot = ClinicSchedule::slotStarting($days, $selectedDate, (string) old('time'));
+        }
+
+        $search = trim($request->string('q')->toString());
+        $selectedPatientId = (string) old('patient_id', $request->input('patient_id', ''));
+        $roster = ClinicSchedule::patients(null, $selectedPatientId);
+        $patients = $search !== ''
+            ? ClinicSchedule::patients($search, $selectedPatientId)
+            : $roster;
 
         return view('dashboard.doctor.patients.create', [
-            'schedule' => $schedule,
-            'selectedDate' => $selectedDate,
-            'times' => $schedule[$selectedDate] ?? [],
-            'minDate' => now()->toDateString(),
-            'maxDate' => AppointmentBooking::bookableUntil()->toDateString(),
-            'selectedPatient' => $selectedPatient,
+            'doctorName' => $doctor->user?->name ?? 'Your practice',
+            'specialization' => $doctor->specialization,
+            'hours' => $hours,
+            'desk' => [
+                'searchUrl' => route('doctor.patients.search'),
+                'query' => $search,
+                'searched' => $search !== '',
+                'roster' => $roster,
+                'patients' => $patients,
+                'patientId' => $selectedPatientId,
+                'patientMode' => old('mode', $request->input('mode') === 'new' ? 'new' : 'existing'),
+                'newName' => old('name', ''),
+                'newEmail' => old('email', ''),
+                'newPhone' => old('phone', ''),
+                'newAge' => old('age', ''),
+                'newGender' => old('gender', ''),
+                'newBlood' => old('blood_type', ''),
+                'date' => $selectedDate,
+                'slot' => $selectedSlot,
+                'days' => $days,
+                'minDate' => $minDate,
+                'maxDate' => $maxDate,
+                'month' => ClinicSchedule::visibleMonth($request->input('month'), $selectedDate, $minDate, $maxDate)->format('Y-m'),
+            ],
         ]);
     }
 
@@ -161,25 +193,8 @@ class PatientController extends Controller
             return response()->json(['patients' => []]);
         }
 
-        $patients = User::query()
-            ->where('role', 'patient')
-            ->where(function ($query) use ($term) {
-                $like = '%'.addcslashes($term, '%_\\').'%';
-                $query->where('name', 'like', $like)
-                    ->orWhere('email', 'like', $like)
-                    ->orWhere('phone', 'like', $like);
-            })
-            ->orderBy('name')
-            ->limit(8)
-            ->get(['id', 'name', 'email', 'phone']);
-
         return response()->json([
-            'patients' => $patients->map(fn (User $patient) => [
-                'id' => $patient->id,
-                'name' => $patient->name,
-                'email' => $patient->email,
-                'phone' => $patient->phone,
-            ])->values(),
+            'patients' => ClinicSchedule::patients($term, null, 20),
         ]);
     }
 

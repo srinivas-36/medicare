@@ -1,8 +1,10 @@
 @php
 use App\Services\AI\MedicalReportExtractor;
+use App\Services\AI\PatientContextBuilder;
 use App\Support\AnalysisBrief;
 use App\Support\AppointmentPage;
 use App\Support\AppointmentPresenter;
+use App\Support\ChartAnalysis;
 use App\Support\MedicalFile;
 
 $notes = $booking['notes'] ?? [];
@@ -15,32 +17,73 @@ $canSaveConsult = in_array($appointment->status, ['confirmed', 'checked_in', 'co
 $analyses = $appointment->relationLoaded('analyses') ? $appointment->analyses : collect();
 $newestAnalysis = $analyses->first();
 $runningAnalysis = $analyses->first(fn ($row) => $row->isRunning());
-$failedAnalysis = $newestAnalysis && $newestAnalysis->status === 'failed' ? $newestAnalysis : null;
-$completedAnalysis = $analyses->first(function ($row) {
-return $row->status === 'completed'
-&& is_array($row->structured_output)
-&& filled($row->structured_output['clinical_summary'] ?? null);
+$completedAnalysis = $analyses->sortByDesc('id')->first(function ($row) {
+    return $row->status === 'completed'
+        && is_array($row->structured_output)
+        && filled($row->structured_output['clinical_summary'] ?? null);
 });
+$failedAnalysis = $completedAnalysis === null && $newestAnalysis && $newestAnalysis->status === 'failed'
+    ? $newestAnalysis
+    : null;
 $analysisLabel = match (true) {
-$runningAnalysis !== null => 'Processing',
-$completedAnalysis !== null => $completedAnalysis->approved_at ? 'Approved' : 'Ready for review',
-filled($consultation?->ai_summary) || filled($consultation?->ai_analysis) => 'Earlier brief',
-default => 'Not started',
+    $runningAnalysis !== null => 'Processing',
+    $completedAnalysis !== null => $completedAnalysis->approved_at ? 'Approved' : 'Ready for review',
+    $failedAnalysis !== null => 'Ready for review',
+    filled($consultation?->ai_summary) || filled($consultation?->ai_analysis) => 'Earlier brief',
+    default => 'Not started',
 };
 $analysisOutput = is_array($completedAnalysis?->structured_output) ? $completedAnalysis->structured_output : [];
-$analysisSummary = trim((string) ($analysisOutput['clinical_summary'] ?? ''));
+if ($analysisOutput === [] && $failedAnalysis) {
+    $analysisOutput = ChartAnalysis::output(
+        app(PatientContextBuilder::class)->preview($appointment),
+        array_map('intval', $failedAnalysis->selected_report_ids ?? []),
+    );
+}
+$analysisBrief = $analysisOutput === [] ? null : AnalysisBrief::present($analysisOutput, []);
+$overview = trim((string) ($analysisBrief['overview'] ?? ''));
 $conditions = collect($analysisOutput['differential_considerations'] ?? [])
-->filter(fn ($row) => is_array($row) && filled($row['possibility'] ?? null))
-->take(3)
-->values();
-$highlights = collect(is_array($analysisOutput['highlights'] ?? null) ? $analysisOutput['highlights'] : [])
-->filter(fn ($item) => is_scalar($item) && trim((string) $item) !== '')
-->map(fn ($item) => trim((string) $item))
-->take(4)
-->values();
-$findings = $analysisOutput === []
-? []
-: array_slice(AnalysisBrief::present($analysisOutput, [])['findings'] ?? [], 0, 4);
+    ->filter(fn ($row) => is_array($row) && filled($row['possibility'] ?? null))
+    ->take(3)
+    ->values();
+$highlights = collect($analysisBrief['chips'] ?? [])
+    ->pluck('label')
+    ->filter(fn ($label) => is_string($label) && trim($label) !== '')
+    ->map(fn ($label) => trim($label))
+    ->take(4)
+    ->values();
+$findings = array_slice($analysisBrief['findings'] ?? [], 0, 8);
+$imagingReports = collect(is_array($analysisOutput['report_interpretations'] ?? null) ? $analysisOutput['report_interpretations'] : [])
+    ->filter(fn ($row) => is_array($row) && preg_match('/\b(mri|ct|x-?ray|scan|ultrasound|imaging|radiolog)/i', (string) ($row['document_type'] ?? '').' '.(string) ($row['source_label'] ?? '')) === 1)
+    ->map(function (array $row) {
+        $lines = [];
+        $narrative = trim((string) ($row['narrative'] ?? ''));
+
+        if ($narrative !== '') {
+            $lines[] = $narrative;
+        }
+
+        foreach (is_array($row['rows'] ?? null) ? $row['rows'] : [] as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $name = trim((string) ($item['parameter'] ?? ''));
+            $value = trim((string) ($item['observed_value'] ?? ''));
+            $line = $name !== '' && $value !== '' ? $name.': '.$value : ($value !== '' ? $value : $name);
+
+            if ($line !== '' && ! in_array($line, $lines, true)) {
+                $lines[] = $line;
+            }
+        }
+
+        return [
+            'title' => trim((string) ($row['document_type'] ?: $row['source_label'] ?? '')) ?: 'Scan report',
+            'lines' => array_slice($lines, 0, 12),
+        ];
+    })
+    ->filter(fn (array $row) => $row['lines'] !== [])
+    ->values();
+$analysisSteps = array_slice($analysisBrief['steps'] ?? [], 0, 3);
 $reviewAnalysis = $runningAnalysis ?? $completedAnalysis ?? $newestAnalysis;
 $analysisReports = $appointment->reports->filter(fn ($report) => MedicalReportExtractor::supported($report));
 $visitLabel = AppointmentPresenter::VISIT_LABELS[$appointment->visit_type] ?? (filled($appointment->visit_type) ? ucfirst((string) $appointment->visit_type) : 'Consultation');
@@ -88,20 +131,19 @@ $allergyRaw = data_get($appointment->patient?->patient_profile?->health_notes, '
 $allergy = is_array($allergyRaw) ? ($allergyRaw['value'] ?? null) : $allergyRaw;
 $allergyLabel = filled($allergy) ? (string) $allergy : 'Not specified';
 
-$chips = [];
-if (filled($person['blood_type'])) {
-$chips[] = ['label' => $person['blood_type'], 'icon' => 'droplet', 'class' => 'bg-[#FEE2E2] text-[#DC2626]'];
-}
-if (($bpStatus['label'] ?? null) === 'High') {
-$chips[] = ['label' => 'Hypertension', 'icon' => 'heart', 'class' => 'bg-[#FCE7F3] text-[#BE185D]'];
-}
-if ($thyroidLabel === 'Yes') {
-$chips[] = ['label' => 'Hyperthyroidism', 'icon' => 'thyroid', 'class' => 'bg-[#F3E8FF] text-[#7C3AED]'];
-}
-if ($diabeticLabel === 'Yes') {
-$chips[] = ['label' => 'Diabetic', 'icon' => 'droplet', 'class' => 'bg-[#FEE2E2] text-[#DC2626]'];
-} elseif ($diabeticLabel === 'No') {
-$chips[] = ['label' => 'Non Diabetic', 'icon' => 'leaf', 'class' => 'bg-[#ECFDF3] text-[#15803D]'];
+$patientDetails = [
+    ['user', 'Name', $person['name'] ?: 'Not provided'],
+    ['clipboard', 'Patient ID', $chartId ?: 'Not provided'],
+    ['user', 'Age', $ageLabel ?: 'Not provided'],
+    ['gender', 'Gender', filled($person['gender']) ? $person['gender'] : 'Not provided'],
+    ['phone', 'Phone', filled($person['phone']) ? $person['phone'] : 'Not provided'],
+    ['mail', 'Email', filled($person['email']) ? $person['email'] : 'Not provided'],
+    ['droplet', 'Blood group', filled($person['blood_type']) ? $person['blood_type'] : 'Not provided'],
+    ['leaf', 'Diabetic', $diabeticLabel],
+    ['thyroid', 'Hyperthyroidism', $thyroidLabel],
+];
+if (filled($person['origin'] ?? null)) {
+    $patientDetails[] = ['clipboard', 'Source', $person['origin']];
 }
 
 $severityFor = function (string $text): ?array {
@@ -221,6 +263,22 @@ if ($bytes < 1024) {
     $initialTab = 'notes';
     }
 
+    $consultationTab = match (true) {
+        filled($consultation?->diagnosis) => 'diagnosis',
+        filled($consultation?->plan) => 'treatment',
+        filled($consultation?->follow_up_instructions) || filled($consultation?->follow_up_on) => 'follow',
+        filled($consultation?->clinical_notes) => 'notes',
+        default => 'symptoms',
+    };
+    $lockConsultationTab = $errors->hasAny([
+        'follow_up_on',
+        'follow_up_instructions',
+        'plan',
+        'diagnosis',
+        'clinical_notes',
+        'cancel_reason',
+    ]);
+
     $history = collect($visitHistory ?? [])->map(function ($visit) {
     return [
     'url' => route('doctor.appointments.show', $visit),
@@ -231,14 +289,32 @@ if ($bytes < 1024) {
     });
     @endphp
 
-    <div x-data="{ tab: @js($initialTab), menu: false, editing: @js($errors->hasAny(['clinical_notes', 'diagnosis', 'plan', 'follow_up_on', 'follow_up_instructions'])), analyzing: false }" @keydown.escape.window="menu = false">
+    <div
+        x-data="{
+            tab: @js($initialTab),
+            menu: false,
+            cancelOpen: @js($errors->has('cancel_reason')),
+            editing: @js($errors->hasAny(['clinical_notes', 'diagnosis', 'plan', 'follow_up_on', 'follow_up_instructions'])),
+            analyzing: false,
+            init() {
+                const hash = window.location.hash;
+                if (@js($lockConsultationTab) || (hash !== '#consultation' && hash !== '#consult')) {
+                    return;
+                }
+
+                this.tab = @js($consultationTab);
+                this.$nextTick(() => document.getElementById('consultation')?.scrollIntoView({ block: 'start' }));
+            },
+        }"
+        @keydown.escape.window="menu = false; cancelOpen = false"
+    >
         <header class="mb-4">
             <a href="{{ $backUrl }}" class="inline-flex items-center gap-1 text-sm font-medium text-[#64748B] no-underline hover:text-[#181A1E]">
                 <x-ui.icon name="chevron" class="h-4 w-4 rotate-90" />
                 {{ $backLabel }}
             </a>
             <div class="mt-3 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div class="min-w-0">
+                <div class="min-w-0 xl:flex-1">
                     <div class="flex flex-wrap items-center gap-2">
                         <h1 class="text-xl font-semibold tracking-tight text-[#181A1E] sm:text-[22px]">Appointment Details</h1>
                         <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {{ $booking['status']['class'] }}">{{ $booking['status']['label'] }}</span>
@@ -257,19 +333,30 @@ if ($bytes < 1024) {
                         <span>{{ $visitLabel }}</span>
                     </p>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 xl:flex-nowrap xl:justify-end">
+                    @if ($runningAnalysis)
+                    <button type="button" class="btn-secondary h-10" disabled>
+                        <x-ui.icon name="spark" class="h-4 w-4 text-[#0067FF]" />
+                        Analyzing
+                    </button>
+                    @elseif ($completedAnalysis)
+                    <a href="{{ route('doctor.appointments.analysis', ['appointment' => $appointment, 'analysis' => $completedAnalysis, 'regenerate' => 1]) }}" class="btn-secondary h-10">
+                        <x-ui.icon name="spark" class="h-4 w-4 text-[#0067FF]" />
+                        AI Re-analyze
+                    </a>
+                    @else
                     <form method="POST" action="{{ route('doctor.appointments.analysis.store', $appointment) }}" @submit="analyzing = true">
                         @csrf
-                        <input type="hidden" name="return_to" value="visit">
                         @foreach ($analysisReports as $report)
                         <input type="hidden" name="report_ids[]" value="{{ $report->id }}">
                         @endforeach
-                        <button type="submit" class="btn-secondary h-10" :disabled="analyzing || @js($runningAnalysis !== null)">
+                        <button type="submit" class="btn-secondary h-10" :disabled="analyzing">
                             <x-ui.icon name="spark" class="h-4 w-4 text-[#0067FF]" />
-                            <span x-show="!analyzing">{{ $runningAnalysis ? 'Analyzing' : 'AI Re-analyze' }}</span>
+                            <span x-show="!analyzing">Generate AI Analysis</span>
                             <span x-show="analyzing" x-cloak>Analyzing…</span>
                         </button>
                     </form>
+                    @endif
                     <a href="{{ route('doctor.patients.show', $appointment->patient_id) }}" class="btn-secondary h-10">Open Patient Chart</a>
                     @if ($canCheckIn)
                     <form method="POST" action="{{ route('doctor.appointments.update-status', $appointment) }}">
@@ -288,7 +375,8 @@ if ($bytes < 1024) {
                         <button type="submit" class="btn-primary h-10">Approve &amp; Confirm</button>
                     </form>
                     @endif
-                    <button type="button" class="{{ $canConfirm ? 'btn-secondary' : 'btn-primary' }} h-10" @click="tab = 'treatment'; editing = true; document.getElementById('consult')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
+                    <div class="flex shrink-0 items-center gap-2">
+                    <button type="button" class="{{ $canConfirm ? 'btn-secondary' : 'btn-primary' }} h-10" @click="tab = 'treatment'; editing = true; document.getElementById('consultation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
                         <x-ui.icon name="pill" class="h-4 w-4" />
                         Start Consultation
                     </button>
@@ -310,92 +398,52 @@ if ($bytes < 1024) {
                             </form>
                             @endif
                             @if ($canCancel)
-                            <form method="POST" action="{{ route('doctor.appointments.update-status', $appointment) }}" class="border-t border-[#F1F5F9] px-3 py-2">
-                                @csrf
-                                <input type="hidden" name="status" value="cancelled">
-                                <label class="block text-xs font-semibold text-[#64748B]">
-                                    Cancellation reason
-                                    <input type="text" name="cancel_reason" required maxlength="255" class="field mt-1 h-9">
-                                </label>
-                                <button type="submit" class="mt-2 text-sm font-semibold text-[#DC2626]">Cancel appointment</button>
-                            </form>
+                            <button type="button" class="mt-1 block w-full rounded-lg border-t border-[#F1F5F9] px-3 py-2 text-left text-sm font-semibold text-[#DC2626] hover:bg-[#FEF2F2]" @click.stop="menu = false; cancelOpen = true; $nextTick(() => $refs.cancelReason?.focus())">Cancel appointment</button>
                             @endif
                             <!-- <a href="#messages" class="block rounded-lg px-3 py-2 text-sm font-medium text-[#181A1E] no-underline hover:bg-[#F8FAFC]" @click="menu = false">Messages</a> -->
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>
         </header>
 
         <div class="grid gap-4 xl:grid-cols-2">
-            <div class="flex min-w-0 flex-col gap-4">
-                <section class="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card">
-                    <h2 class="sr-only">Patient Information</h2>
-                    <div class="flex items-start gap-4">
-                        <x-ui.avatar :name="$person['name'] ?: 'Patient'" :photo="$person['photo']" size="3xl" tone="violet" />
-                        <div class="min-w-0 flex-1">
-                            <div class="flex flex-wrap items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <p class="truncate text-lg font-semibold text-[#181A1E]">{{ $person['name'] ?: 'Not provided' }}</p>
-                                    @if (filled($person['origin'] ?? null))
-                                    <p class="mt-1 text-sm font-semibold text-[#0067FF]">{{ $person['origin'] }}</p>
-                                    @endif
-                                    @if ($chartId)
-                                    <p class="text-sm text-[#64748B]">ID: {{ $chartId }}</p>
-                                    @endif
-                                </div>
-                                <div class="flex flex-wrap items-center gap-3 text-sm text-[#64748B]">
-                                    @if ($ageLabel)
-                                    <span class="inline-flex items-center gap-1.5">
-                                        <x-ui.icon name="user" class="h-4 w-4" />
-                                        {{ $ageLabel }}
-                                    </span>
-                                    @endif
-                                    @if (filled($person['gender']))
-                                    <span class="inline-flex items-center gap-1.5">
-                                        <x-ui.icon name="gender" class="h-4 w-4" />
-                                        {{ $person['gender'] }}
-                                    </span>
-                                    @endif
-                                </div>
-                            </div>
-                            <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#64748B]">
-                                @if (filled($person['phone']))
-                                <span class="inline-flex items-center gap-1.5">
-                                    <x-ui.icon name="phone" class="h-4 w-4" />
-                                    {{ $person['phone'] }}
-                                </span>
-                                @endif
-                                @if (filled($person['email']))
-                                <a href="mailto:{{ $person['email'] }}" class="inline-flex min-w-0 items-center gap-1.5 text-[#64748B] no-underline hover:text-[#0067FF]">
-                                    <x-ui.icon name="mail" class="h-4 w-4 shrink-0" />
-                                    <span class="truncate">{{ $person['email'] }}</span>
-                                </a>
-                                @endif
-                            </div>
-                            @if ($chips !== [])
-                            <div class="mt-4 flex flex-wrap gap-2">
-                                @foreach ($chips as $chip)
-                                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold {{ $chip['class'] }}">
-                                    <x-ui.icon :name="$chip['icon']" class="h-3.5 w-3.5" />
-                                    {{ $chip['label'] }}
-                                </span>
-                                @endforeach
-                            </div>
-                            @endif
-                        </div>
+                <section class="min-w-0 self-start rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card xl:col-start-1 xl:row-start-1">
+                    <div class="flex items-center gap-3">
+                        <x-ui.avatar :name="$person['name'] ?: 'Patient'" :photo="$person['photo']" size="md" tone="violet" />
+                        <h2 class="text-sm font-semibold text-[#181A1E]">Patient Information</h2>
                     </div>
+                    <dl class="mt-4 grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                        @foreach ($patientDetails as [$icon, $label, $value])
+                        <div class="flex items-start gap-3">
+                            <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F4F7FB] text-[#64748B]">
+                                <x-ui.icon :name="$icon" class="h-4 w-4" />
+                            </span>
+                            <div class="min-w-0">
+                                <dt class="text-xs text-[#64748B]">{{ $label }}</dt>
+                                <dd class="mt-0.5 truncate text-sm font-semibold text-[#181A1E]">
+                                    @if ($label === 'Email' && filled($person['email']))
+                                    <a href="mailto:{{ $person['email'] }}" class="text-[#181A1E] no-underline hover:text-[#0067FF]">{{ $value }}</a>
+                                    @else
+                                    {{ $value }}
+                                    @endif
+                                </dd>
+                            </div>
+                        </div>
+                        @endforeach
+                    </dl>
                 </section>
 
-                <section class="flex-1 rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card">
+                <section class="min-w-0 self-start rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card xl:col-start-1 xl:row-start-2">
                     <div class="flex items-center justify-between gap-3">
                         <h2 class="text-sm font-semibold text-[#181A1E]">Visit Information</h2>
-                        <!-- <button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[#0067FF]" @click="editing = true; tab = 'notes'; document.getElementById('consult')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
+                        <!-- <button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[#0067FF]" @click="editing = true; tab = 'notes'; document.getElementById('consultation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
                             <x-ui.icon name="pencil" class="h-3.5 w-3.5" />
                             Edit
                         </button> -->
                     </div>
-                    <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+                    <dl class="mt-4 grid gap-x-4 gap-y-3 sm:grid-cols-2">
                         @foreach ([
                         ['user', 'Doctor', $booking['doctor_name'] ?: 'Not provided'],
                         ['stethoscope', 'Specialization', $booking['specialization'] ?: 'Not provided'],
@@ -435,10 +483,8 @@ if ($bytes < 1024) {
                         @endif
                     </dl>
                 </section>
-            </div>
 
-            <div class="flex min-w-0 flex-col gap-4">
-                <section class="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card">
+                <section class="flex h-full min-w-0 flex-col self-stretch rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card xl:col-start-2 xl:row-start-1">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex items-center gap-2">
                             <x-ui.icon name="spark" class="h-4 w-4 text-[#0067FF]" />
@@ -448,16 +494,13 @@ if ($bytes < 1024) {
                         </div>
                         <a href="{{ $reviewAnalysis ? route('doctor.appointments.analysis', [$appointment, $reviewAnalysis]) : route('doctor.appointments.analysis', $appointment) }}" class="shrink-0 text-sm font-semibold text-[#0067FF] no-underline hover:underline">View Full Analysis</a>
                     </div>
-                    @if ($failedAnalysis)
-                    <p class="mt-3 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-sm text-[#B91C1C]">{{ session('analysis_error', $failedAnalysis->safeError()) }}</p>
-                    @endif
                     <p x-show="analyzing" x-cloak class="mt-3 text-sm text-[#0067FF]">Re-analyzing this visit. This can take a minute.</p>
-                    @if ($analysisSummary !== '')
-                    <p class="mt-3 text-sm leading-6 text-[#4E545F]">{{ $analysisSummary }}</p>
-                    @endif
-                    <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <h3 class="text-xs font-semibold text-[#64748B]">{{ $conditions->isNotEmpty() ? 'Possible Conditions' : 'Highlights' }}</h3>
+                    <div class="mt-4 flex flex-1 flex-col gap-3">
+                        <div class="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                            <h3 class="text-xs font-semibold text-[#64748B]">{{ $overview !== '' ? 'Clinical overview' : ($conditions->isNotEmpty() ? 'Possible Conditions' : 'Highlights') }}</h3>
+                            @if ($overview !== '')
+                            <p class="mt-3 text-sm leading-6 text-[#181A1E]">{{ $overview }}</p>
+                            @endif
                             @if ($conditions->isNotEmpty())
                             <ol class="mt-3 space-y-3">
                                 @foreach ($conditions as $condition)
@@ -473,16 +516,16 @@ if ($bytes < 1024) {
                                 @endforeach
                             </ol>
                             @elseif ($highlights->isNotEmpty())
-                            <ul class="mt-3 space-y-2">
+                            <div class="mt-3 flex flex-wrap gap-2">
                                 @foreach ($highlights as $highlight)
-                                <li class="text-sm font-medium text-[#181A1E]">{{ $highlight }}</li>
+                                <span class="inline-flex rounded-full bg-[#E8F2FF] px-2.5 py-1 text-xs font-semibold text-[#0067FF]">{{ $highlight }}</span>
                                 @endforeach
-                            </ul>
-                            @else
+                            </div>
+                            @elseif ($overview === '')
                             <p class="mt-3 text-sm text-[#64748B]">{{ $completedAnalysis ? 'No separate conditions were suggested.' : 'Possible conditions appear here after an analysis is ready.' }}</p>
                             @endif
                         </div>
-                        <div>
+                        <!-- <div class="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
                             <h3 class="text-xs font-semibold text-[#64748B]">Key Findings</h3>
                             @if ($findings === [])
                             <p class="mt-3 text-sm text-[#64748B]">{{ $completedAnalysis ? 'No findings were returned.' : 'Key findings appear here after an analysis is ready.' }}</p>
@@ -503,7 +546,37 @@ if ($bytes < 1024) {
                                 @endforeach
                             </ul>
                             @endif
+                        </div> -->
+                        <!-- @if ($imagingReports->isNotEmpty())
+                        <div class="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                            <h3 class="text-xs font-semibold text-[#64748B]">Scan report</h3>
+                            <div class="mt-3 space-y-3">
+                                @foreach ($imagingReports as $report)
+                                <div>
+                                    <p class="text-sm font-medium text-[#181A1E]">{{ $report['title'] }}</p>
+                                    <ul class="mt-1 space-y-1">
+                                        @foreach ($report['lines'] as $line)
+                                        <li class="text-xs leading-5 text-[#64748B]">{{ $line }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                                @endforeach
+                            </div>
                         </div>
+                        @endif -->
+                        <!-- @if ($analysisSteps !== [])
+                        <div class="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                            <h3 class="text-xs font-semibold text-[#64748B]">Next steps</h3>
+                            <ol class="mt-3 space-y-2">
+                                @foreach ($analysisSteps as $step)
+                                <li class="flex items-start gap-2 text-sm leading-5 text-[#181A1E]">
+                                    <span class="w-4 shrink-0 text-[#64748B]">{{ $loop->iteration }}</span>
+                                    <span>{{ $step }}</span>
+                                </li>
+                                @endforeach
+                            </ol>
+                        </div>
+                        @endif -->
                     </div>
                     <p class="mt-4 flex items-start gap-2 rounded-lg bg-[#FFFBEB] px-3 py-2 text-xs leading-5 text-[#92400E]">
                         <x-ui.icon name="alert" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -511,8 +584,8 @@ if ($bytes < 1024) {
                     </p>
                 </section>
 
-                <section id="consult" class="flex min-h-0 flex-1 scroll-mt-4 flex-col rounded-xl border border-[#E2E8F0] bg-white shadow-card">
-                    <div class="grid grid-cols-5 border-b border-[#E2E8F0]" role="tablist" aria-label="Consultation">
+                <section id="consultation" class="flex min-h-0 flex-1 scroll-mt-4 flex-col rounded-xl border border-[#E2E8F0] bg-white shadow-card">
+                    <div class="no-scrollbar flex overflow-x-auto border-b border-[#E2E8F0]" role="tablist" aria-label="Consultation">
                         @foreach ([
                         'symptoms' => 'Symptoms & Examination',
                         'diagnosis' => 'Diagnosis',
@@ -523,10 +596,10 @@ if ($bytes < 1024) {
                         <button
                             type="button"
                             role="tab"
-                            @click="tab = '{{ $key }}'"
+                            @click="tab = '{{ $key }}'; $el.scrollIntoView({ inline: 'nearest', block: 'nearest' })"
                             :aria-selected="tab === '{{ $key }}'"
                             :class="tab === '{{ $key }}' ? 'border-[#0067FF] text-[#0067FF]' : 'border-transparent text-[#64748B] hover:text-[#181A1E]'"
-                            class="flex h-full min-w-0 items-center justify-center border-b-2 px-1.5 py-3 text-center text-xs font-semibold leading-tight sm:text-[13px]">{{ $label }}</button>
+                            class="shrink-0 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold">{{ $label }}</button>
                         @endforeach
                     </div>
 
@@ -686,7 +759,6 @@ if ($bytes < 1024) {
                         @endunless
                     </form>
                 </section>
-            </div>
         </div>
 
         <div class="mt-4 grid gap-4 xl:grid-cols-3">
@@ -760,11 +832,11 @@ if ($bytes < 1024) {
                     Quick Actions
                 </h2>
                 <div class="mt-4 grid grid-cols-2 gap-3">
-                    <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="tab = 'notes'; editing = true; document.getElementById('consult')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
+                    <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="tab = 'notes'; editing = true; document.getElementById('consultation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
                         <x-ui.icon name="note" class="h-5 w-5 text-[#0067FF]" />
                         Add Note
                     </button>
-                    <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="tab = 'treatment'; editing = true; document.getElementById('consult')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
+                    <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="tab = 'treatment'; editing = true; document.getElementById('consultation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
                         <x-ui.icon name="pill" class="h-5 w-5 text-[#0067FF]" />
                         Prescribe Medicine
                     </button>
@@ -772,7 +844,7 @@ if ($bytes < 1024) {
                         <x-ui.icon name="users" class="h-5 w-5 text-[#0067FF]" />
                         Send Referral
                     </a>
-                    <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="tab = 'follow'; editing = true; document.getElementById('consult')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
+                    <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="tab = 'follow'; editing = true; document.getElementById('consultation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
                         <x-ui.icon name="calendar" class="h-5 w-5 text-[#0067FF]" />
                         Schedule Follow-up
                     </button>
@@ -787,4 +859,45 @@ if ($bytes < 1024) {
         <div class="mt-4">
             @include('dashboard.appointments.partials.referral-form')
         </div>
+
+        @if ($canCancel)
+        <template x-teleport="body">
+        <div
+            x-show="cancelOpen"
+            x-cloak
+            class="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-appointment-title"
+        >
+            <div class="absolute inset-0 bg-[#0B1F3A]/50" @click="cancelOpen = false"></div>
+            <div class="relative w-full max-w-md overflow-hidden rounded-t-2xl bg-white shadow-[0_24px_80px_rgba(11,31,58,0.28)] sm:rounded-2xl">
+                <div class="flex items-start justify-between gap-3 border-b border-[#E2E8F0] px-5 py-4">
+                    <div>
+                        <h2 id="cancel-appointment-title" class="text-lg font-semibold text-[#181A1E]">Cancel appointment</h2>
+                        <p class="mt-0.5 text-sm text-[#64748B]">This visit will be cancelled and the time will open again.</p>
+                    </div>
+                    <button type="button" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#181A1E] hover:bg-[#F4F7FB]" @click="cancelOpen = false" aria-label="Close">
+                        <x-ui.icon name="close" class="h-4 w-4" />
+                    </button>
+                </div>
+                <form method="POST" action="{{ route('doctor.appointments.update-status', $appointment) }}" class="px-5 py-4">
+                    @csrf
+                    <input type="hidden" name="status" value="cancelled">
+                    <label class="block text-sm font-semibold text-[#181A1E]" for="cancel-reason">
+                        Cancellation reason
+                        <input id="cancel-reason" x-ref="cancelReason" type="text" name="cancel_reason" value="{{ old('cancel_reason') }}" required maxlength="255" class="field mt-1.5" placeholder="Why is this visit being cancelled?">
+                    </label>
+                    @error('cancel_reason')
+                    <p class="mt-2 text-sm text-[#DC2626]">{{ $message }}</p>
+                    @enderror
+                    <div class="mt-4 flex justify-end gap-2">
+                        <button type="button" class="btn-secondary h-10" @click="cancelOpen = false">Go back</button>
+                        <button type="submit" class="btn-danger h-10">Cancel appointment</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        </template>
+        @endif
     </div>

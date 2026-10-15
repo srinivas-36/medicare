@@ -66,7 +66,7 @@
 <section class="rounded-2xl border border-line bg-white px-5 py-5 shadow-card sm:px-6">
     <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex min-w-0 items-center gap-4">
-            <img src="{{ $photoUrl }}" alt="{{ data_get($doctor, 'name') }}" class="h-[72px] w-[72px] shrink-0 rounded-full object-cover ring-1 ring-line">
+            <img src="{{ $photoUrl }}" alt="{{ data_get($doctor, 'name') }}" class="h-[72px] w-[72px] shrink-0 rounded-2xl bg-[#F7FAFF] object-contain object-center ring-1 ring-line">
             <div class="min-w-0">
                 <h2 class="truncate text-2xl font-bold tracking-tight text-navy">{{ data_get($doctor, 'name') }}</h2>
                 @if ($specialty)
@@ -268,70 +268,41 @@
                 </div>
             </div>
 
-            <div class="mt-5 grid items-stretch gap-4 lg:grid-cols-[minmax(240px,0.85fr)_minmax(0,1.7fr)]">
-                <div
-                    data-drop-zone
-                    class="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#c9daf8] bg-[#f7faff] px-6 py-8 text-center"
-                >
-                    <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white text-primary shadow-sm">
-                        <x-ui.icon name="upload" class="h-6 w-6" />
-                    </span>
-                    <p class="mt-4 text-sm font-semibold text-navy">
-                        Drop reports here or
-                        <label for="other-report-files" class="cursor-pointer text-primary">browse</label>
-                    </p>
-                    <p class="mt-1 text-xs text-muted">Support PDF, JPG, PNG · Max 10 MB per file</p>
-                    <div data-file-list="other" class="mt-4 w-full space-y-2 empty:hidden"></div>
-                </div>
-
-                <div class="grid gap-3 sm:grid-cols-3">
-                    @foreach ($reportGroups as $group)
-                        <div class="flex min-h-[220px] flex-col rounded-2xl border border-line bg-white p-4">
-                            <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl {{ $group['tone'] }}">
-                                <x-ui.icon :name="$group['icon']" class="h-5 w-5" />
-                            </span>
-                            <h3 class="mt-3 text-sm font-semibold text-navy">{{ $group['name'] }}</h3>
-                            <p class="mt-1 text-xs leading-5 text-muted">{{ $group['hint'] }}</p>
-                            <label class="mt-3 block">
-                                <span class="text-xs font-semibold text-navy">Report name</span>
-                                <input
-                                    type="text"
-                                    name="{{ $group['key'] }}_report_name"
-                                    value="{{ $field($group['key'].'_report_name') }}"
-                                    maxlength="120"
-                                    placeholder="{{ $group['key'] === 'other' ? 'MRI, ultrasound, prescription' : $group['name'] }}"
-                                    class="field mt-1.5 text-xs"
-                                >
-                            </label>
-                            @if ($group['key'] !== 'other')
-                                <div data-file-list="{{ $group['key'] }}" class="mt-3 space-y-2 empty:hidden"></div>
-                            @endif
-                            <label class="mt-auto inline-flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-line bg-white text-sm font-semibold text-navy hover:bg-page" @if ($group['key'] === 'other') for="other-report-files" @endif>
-                                <x-ui.icon name="plus" class="h-4 w-4 text-primary" />
-                                Add files
-                                @if ($group['key'] !== 'other')
-                                    <input
-                                        data-file-input="{{ $group['key'] }}"
-                                        type="file"
-                                        name="{{ $group['key'] }}_reports[]"
-                                        accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                                        multiple
-                                        class="file-picker"
-                                    >
-                                @endif
-                            </label>
-                        </div>
-                    @endforeach
-                    <input
-                        id="other-report-files"
-                        data-file-input="other"
-                        type="file"
-                        name="other_reports[]"
-                        accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                        multiple
-                        class="file-picker"
-                    >
-                </div>
+            <div class="mt-5 grid gap-3 sm:grid-cols-3">
+                @foreach ($reportGroups as $group)
+                    <div class="flex min-h-[220px] min-w-0 flex-col rounded-2xl border border-line bg-white p-4">
+                        <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl {{ $group['tone'] }}">
+                            <x-ui.icon :name="$group['icon']" class="h-5 w-5" />
+                        </span>
+                        <h3 class="mt-3 text-sm font-semibold text-navy">{{ $group['name'] }}</h3>
+                        <p class="mt-1 text-xs leading-5 text-muted">{{ $group['hint'] }}</p>
+                        <label class="mt-3 block min-w-0">
+                            <span class="text-xs font-semibold text-navy">Report name</span>
+                            <input
+                                type="text"
+                                name="{{ $group['key'] }}_report_name"
+                                value="{{ $field($group['key'].'_report_name') }}"
+                                maxlength="120"
+                                placeholder="{{ $group['key'] === 'other' ? 'MRI, ultrasound, prescription' : $group['name'] }}"
+                                class="field mt-1.5"
+                            >
+                        </label>
+                        <div data-file-list="{{ $group['key'] }}" class="mt-3 space-y-2 empty:hidden"></div>
+                        <label class="mt-auto inline-flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-line bg-white text-sm font-semibold text-navy hover:bg-page">
+                            <x-ui.icon name="plus" class="h-4 w-4 text-primary" />
+                            Add files
+                            <input
+                                @if ($group['key'] === 'other') id="other-report-files" @endif
+                                data-file-input="{{ $group['key'] }}"
+                                type="file"
+                                name="{{ $group['key'] }}_reports[]"
+                                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                                multiple
+                                class="file-picker"
+                            >
+                        </label>
+                    </div>
+                @endforeach
             </div>
         </section>
 

@@ -25,8 +25,8 @@
 @endphp
 
 <article class="card flex h-full flex-col overflow-hidden !p-0">
-    <a href="{{ $profileUrl }}" class="block bg-light">
-        <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-52 w-full object-cover object-top" loading="lazy" width="480" height="320">
+    <a href="{{ $profileUrl }}" class="block aspect-square overflow-hidden bg-[#F7FAFF]">
+        <img src="{{ $photoUrl }}" alt="{{ $name }}" class="h-full w-full object-cover object-center" loading="lazy">
     </a>
     <div class="flex flex-1 flex-col p-5">
         <h3 class="text-lg font-semibold text-navy">

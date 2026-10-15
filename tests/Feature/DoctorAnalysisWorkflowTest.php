@@ -183,6 +183,35 @@ class DoctorAnalysisWorkflowTest extends TestCase
             ->assertSee('Decision support only');
     }
 
+    public function test_an_mri_report_is_sent_with_instructions_to_keep_every_impression_line(): void
+    {
+        Storage::fake('local');
+        $this->configureAi();
+
+        [$doctorUser, $doctor] = $this->makeDoctor();
+        $patient = $this->makePatient();
+        $appointment = $this->appointment($patient, $doctor);
+        $mri = $this->report($appointment, 'brain-mri.png', 'mri-image-bytes', 'MRI');
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response($this->providerBody('MRI impression kept.')),
+        ]);
+
+        $this->actingAs($doctorUser)
+            ->post(route('doctor.appointments.analysis.store', $appointment), [
+                'report_ids' => [$mri->id],
+            ])
+            ->assertRedirect();
+
+        Http::assertSent(function ($request) {
+            $body = json_encode($request->data());
+
+            return str_contains($body, 'Group: MRI')
+                && str_contains($body, 'Copy every printed finding and every impression line')
+                && str_contains($body, 'Do not stop after');
+        });
+    }
+
     public function test_a_second_submit_does_not_start_another_job_while_one_is_open(): void
     {
         Http::preventStrayRequests();
@@ -243,7 +272,8 @@ class DoctorAnalysisWorkflowTest extends TestCase
 
         $this->actingAs($doctorUser)
             ->post(route('doctor.appointments.analysis.store', $appointment))
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionMissing('status');
 
         $failed = AiAnalysis::query()->first();
         $this->assertSame('failed', $failed->status);
@@ -276,6 +306,95 @@ class DoctorAnalysisWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Amina Rahman')
             ->assertDontSee('SECRET_MALFORMED_TOKEN');
+    }
+
+    public function test_visit_page_keeps_the_saved_analysis_when_a_later_retry_fails(): void
+    {
+        [$doctorUser, $doctor] = $this->makeDoctor();
+        $patient = $this->makePatient();
+        $appointment = $this->appointment($patient, $doctor);
+
+        AiAnalysis::query()->create([
+            'appointment_id' => $appointment->id,
+            'doctor_id' => $doctor->id,
+            'patient_id' => $patient->id,
+            'initiated_by' => $doctorUser->id,
+            'status' => 'completed',
+            'analysis_type' => 'visit_brief',
+            'selected_report_ids' => [],
+            'structured_output' => [
+                'clinical_summary' => 'Saved visit summary for the doctor.',
+                'patient_context' => [
+                    'background' => 'Earlier headache visit.',
+                    'symptoms' => 'Sinus check',
+                ],
+                'key_findings' => [[
+                    'title' => 'Hemoglobin',
+                    'category' => 'extracted_measurement',
+                    'priority' => 'routine',
+                    'observed_value' => '14.2',
+                    'unit' => 'g/dL',
+                    'reference_range' => '13-17',
+                    'explanation' => 'Printed inside the supplied range.',
+                ]],
+                'differential_considerations' => [],
+                'suggested_review_actions' => [[
+                    'kind' => 'verify',
+                    'text' => 'Confirm the timeline with the patient.',
+                ]],
+                'limitations' => 'Duration was not recorded.',
+            ],
+            'original_summary' => 'Saved visit summary for the doctor.',
+            'approved_at' => now(),
+            'approved_by' => $doctorUser->id,
+            'completed_at' => now()->subHour(),
+        ]);
+
+        AiAnalysis::query()->create([
+            'appointment_id' => $appointment->id,
+            'doctor_id' => $doctor->id,
+            'patient_id' => $patient->id,
+            'initiated_by' => $doctorUser->id,
+            'status' => 'completed',
+            'analysis_type' => 'visit_brief',
+            'selected_report_ids' => [],
+            'structured_output' => [
+                'clinical_summary' => 'Later regenerated summary that stays on the analysis page.',
+                'key_findings' => [],
+                'differential_considerations' => [],
+                'suggested_review_actions' => [],
+            ],
+            'original_summary' => 'Later regenerated summary that stays on the analysis page.',
+            'completed_at' => now(),
+        ]);
+
+        AiAnalysis::query()->create([
+            'appointment_id' => $appointment->id,
+            'doctor_id' => $doctor->id,
+            'patient_id' => $patient->id,
+            'initiated_by' => $doctorUser->id,
+            'status' => 'failed',
+            'error_code' => 'provider_error',
+            'selected_report_ids' => [],
+            'completed_at' => now(),
+        ]);
+
+        $saved = AiAnalysis::query()->orderByDesc('id')->where('status', 'completed')->first();
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments.show', $appointment))
+            ->assertOk()
+            ->assertSee('Later regenerated summary that stays on the analysis page.')
+            ->assertSee('regenerate=1', false)
+            ->assertDontSee('The analysis service did not return a result.')
+            ->assertDontSee('No separate conditions were suggested.')
+            ->assertDontSee('name="return_to"', false);
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments.analysis', ['appointment' => $appointment, 'analysis' => $saved, 'regenerate' => 1]))
+            ->assertOk()
+            ->assertSee('Later regenerated summary that stays on the analysis page.')
+            ->assertSee('Generate again');
     }
 
     public function test_doctor_review_and_approval_are_audited_and_do_not_change_the_visit_note(): void

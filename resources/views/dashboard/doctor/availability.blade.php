@@ -3,28 +3,28 @@
 @section('title', 'Availability')
 
 @section('content')
-    @if (session('status'))
-        <p class="mb-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-success">{{ session('status') }}</p>
-    @endif
+@if (session('status'))
+<p class="mb-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-success">{{ session('status') }}</p>
+@endif
 
-    @if ($errors->any())
-        <p class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">{{ $errors->first() }}</p>
-    @endif
+@if ($errors->any())
+<p class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">{{ $errors->first() }}</p>
+@endif
 
-    <form method="POST" action="{{ route('doctor.availability.update') }}" class="space-y-4">
-        @csrf
-        @method('PUT')
-        @include('dashboard.doctor.partials.weekly-schedule', [
-            'timeSlots' => $timeSlots,
-            'appointmentDuration' => $appointmentDuration,
-            'appointmentBuffer' => $appointmentBuffer,
-            'asPage' => true,
-        ])
-        <div class="flex justify-end">
-            <button type="submit" class="btn-primary">Save schedule</button>
-        </div>
-    </form>
-
+<form method="POST" action="{{ route('doctor.availability.update') }}" class="space-y-4">
+    @csrf
+    @method('PUT')
+    @include('dashboard.doctor.partials.weekly-schedule', [
+    'timeSlots' => $timeSlots,
+    'appointmentDuration' => $appointmentDuration,
+    'appointmentBuffer' => $appointmentBuffer,
+    'asPage' => true,
+    ])
+    <div class="flex justify-end">
+        <button type="submit" class="btn-primary">Save schedule</button>
+    </div>
+</form>
+<!-- 
     <section class="panel mt-4 p-4 sm:p-5">
         <h2 class="text-sm font-semibold text-heading">Date exceptions</h2>
         <p class="mt-1 max-w-2xl text-sm text-body">Leave blocks new bookings. Extra hours add a one-off clinic. Override replaces that day’s weekly hours.</p>
@@ -77,5 +77,5 @@
                 <li class="text-sm text-text">No date exceptions yet.</li>
             @endforelse
         </ul>
-    </section>
+    </section> -->
 @endsection

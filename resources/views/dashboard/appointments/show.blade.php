@@ -14,7 +14,7 @@
 
 @section('content')
     <div>
-        @if (session('status'))
+        @if (session('status') && ! str_contains((string) session('status'), 'did not return a result'))
             <p class="alert-success">{{ session('status') }}</p>
         @endif
 

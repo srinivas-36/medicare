@@ -95,6 +95,8 @@ class ReferralController extends Controller
             ? array_map('intval', (array) $request->input('report_ids', []))
             : null;
         $packet = app(ReferralSender::class)->patientPacket($appointment, $reportIds);
+        $profile = $appointment->patient?->patient_profile;
+        $notes = $profile?->health_notes;
 
         $record = MockReferralInbox::remember((int) $request->user()->id, [
             'patient' => $appointment->patient?->name ?? 'Patient',
@@ -105,6 +107,11 @@ class ReferralController extends Controller
             'reason' => $data['reason'],
             'question' => $data['clinical_question'] ?? '',
             'urgency' => $urgency,
+            'patient_details' => [
+                'age' => $profile?->age,
+                'gender' => filled($appointment->patient?->gender) ? (string) $appointment->patient->gender : null,
+                'health_notes' => is_array($notes) ? $notes : [],
+            ],
             'summary' => $packet,
             'reports' => $this->reportCards($appointment, $reportIds),
             'report_ids' => $reportIds ?? $appointment->reports->pluck('id')->map(fn ($id) => (int) $id)->all(),
@@ -130,10 +137,29 @@ class ReferralController extends Controller
             ? $record['reports']
             : ($appointment ? $this->reportCards($appointment, $reportIds) : []);
 
+        $frozen = is_array($record['patient_details'] ?? null) ? $record['patient_details'] : null;
+        $patientUser = $appointment?->patient;
+        $liveNotes = $patientUser?->patient_profile?->health_notes;
+
         return view('dashboard.doctor.referrals.preview', [
             'referral' => $record,
             'summary' => $summary,
             'reports' => $this->withReportLinks($reports, $appointment),
+            'demographics' => $frozen !== null
+                ? [
+                    'age' => $frozen['age'] ?? null,
+                    'gender' => filled($frozen['gender'] ?? null) ? (string) $frozen['gender'] : null,
+                    'health_notes' => is_array($frozen['health_notes'] ?? null) ? $frozen['health_notes'] : [],
+                ]
+                : [
+                    'age' => $patientUser?->patient_profile?->age,
+                    'gender' => filled($patientUser?->gender) ? (string) $patientUser->gender : null,
+                    'health_notes' => is_array($liveNotes) ? $liveNotes : [],
+                ],
+            'viewer' => [
+                'name' => $request->user()->name,
+                'specialization' => $request->user()->doctor?->specialization ?? '',
+            ],
         ]);
     }
 
@@ -142,7 +168,7 @@ class ReferralController extends Controller
         $doctor = $this->doctor($request);
         abort_unless($this->involved($doctor, $referral), 403);
 
-        $referral->load(['reports', 'fromDoctor.user', 'toDoctor.user', 'patient', 'proposedAppointment']);
+        $referral->load(['reports', 'fromDoctor.user', 'toDoctor.user', 'toDoctor.experiences', 'patient', 'proposedAppointment']);
 
         $incoming = (int) $referral->to_doctor_id === (int) $doctor->id;
         $openSlots = $incoming && $referral->status === 'accepted'
@@ -334,6 +360,7 @@ class ReferralController extends Controller
                     'title' => $readable ? (string) $report->original_name : ($group !== '' ? $group : 'Report'),
                     'group' => $group,
                     'kind' => $kind,
+                    'date' => $report->created_at?->timezone(config('app.timezone'))->format('j M Y') ?? '',
                 ];
             })
             ->values()

@@ -20,7 +20,7 @@ $tones = [
 ];
 @endphp
 
-<section class="pb-8">
+<section class="py-14 lg:py-20">
     <div class="page">
         @if ($showHeading)
         <div class="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
@@ -48,7 +48,7 @@ $tones = [
         <div class="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             @foreach ($cards as $service)
             <article class="flex h-full flex-col rounded-[22px] border border-[#EEF2F6] bg-white p-3 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-                <img src="{{ asset($service['photo']) }}" alt="" class="h-48 w-full rounded-2xl object-cover" loading="lazy" width="640" height="360">
+                <img src="{{ asset($service['photo']) }}" alt="{{ $service['name'] }}" class="aspect-[3/2] w-full rounded-2xl bg-[#F7FAFF] object-contain object-center" loading="lazy">
                 <div class="flex flex-1 flex-col px-2 pb-1 pt-4">
                     <h3 class="text-[17px] font-bold tracking-tight text-[#1A1D21]">{{ $service['name'] }}</h3>
                     <p class="mt-2 flex-1 text-sm leading-6 text-[#6B7280]">{{ $service['text'] }}</p>

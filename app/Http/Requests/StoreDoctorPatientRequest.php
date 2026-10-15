@@ -20,10 +20,13 @@ class StoreDoctorPatientRequest extends FormRequest
     {
         $email = strtolower(trim((string) $this->input('email')));
 
+        $age = trim((string) $this->input('age'));
+
         $this->merge([
             'email' => $email === '' ? null : $email,
             'gender' => $this->input('gender') === '' ? null : $this->input('gender'),
             'blood_type' => $this->input('blood_type') === '' ? null : $this->input('blood_type'),
+            'age' => $age === '' ? null : $age,
         ]);
     }
 
@@ -48,7 +51,7 @@ class StoreDoctorPatientRequest extends FormRequest
             'name' => [$existingAccount ? 'nullable' : 'required', 'string', 'max:255'],
             'email' => [$existingAccount ? 'nullable' : 'required', 'string', 'email', 'max:255'],
             'phone' => [$existingAccount ? 'nullable' : 'required', 'string', 'max:30'],
-            'age' => [$existingAccount ? 'nullable' : 'required', 'integer', 'min:0', 'max:120'],
+            'age' => [$existingAccount ? 'nullable' : 'required', 'string', 'regex:/^[0-9]{2}$/'],
             'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
             'blood_type' => ['nullable', Rule::in(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])],
             'password' => [($existingAccount || $existingPatient) ? 'nullable' : 'required', 'confirmed', Password::defaults()],
@@ -61,6 +64,17 @@ class StoreDoctorPatientRequest extends FormRequest
             'time' => ['required', 'date_format:H:i'],
             'visit_type' => ['required', Rule::in(['check-up', 'consultation', 'follow-up', 'emergency'])],
             'reason' => ['nullable', 'string', 'max:255'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'age.required' => 'Enter the age.',
+            'age.regex' => 'Enter a 2-digit age using numbers only.',
         ];
     }
 }
