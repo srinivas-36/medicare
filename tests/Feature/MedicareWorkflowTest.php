@@ -180,6 +180,89 @@ class MedicareWorkflowTest extends TestCase
         $this->assertTrue(ClinicSetting::current()->booking_horizon_months >= 1);
     }
 
+    public function test_patient_history_follow_up_and_status_filters_use_the_saved_review(): void
+    {
+        [, $doctor] = $this->makeDoctor();
+        $patient = User::factory()->create(['role' => 'patient', 'name' => 'Amina Rahman']);
+        $reviewOn = now()->addDays(6)->toDateString();
+
+        $recorded = Appointment::query()->create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'appointment_date' => now()->subDays(3)->toDateString(),
+            'appointment_time' => '09:00:00',
+            'status' => 'completed',
+            'visit_type' => 'consultation',
+            'reason' => 'First consultation',
+        ]);
+
+        Consultation::query()->create([
+            'appointment_id' => $recorded->id,
+            'doctor_id' => $doctor->id,
+            'patient_id' => $patient->id,
+            'follow_up_on' => $reviewOn,
+            'follow_up_instructions' => 'Come back for a reading.',
+        ]);
+
+        $review = Appointment::query()->create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'appointment_date' => $reviewOn,
+            'appointment_time' => '11:00:00',
+            'status' => 'confirmed',
+            'visit_type' => 'consultation',
+            'reason' => 'Scheduled review',
+        ]);
+
+        Appointment::query()->create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'appointment_date' => now()->subDay()->toDateString(),
+            'appointment_time' => '15:00:00',
+            'status' => 'cancelled',
+            'visit_type' => 'check-up',
+            'reason' => 'Cancelled check',
+        ]);
+
+        $this->actingAs($patient)
+            ->get(route('patient.history', ['visit' => 'follow-up']))
+            ->assertOk()
+            ->assertSee('First consultation')
+            ->assertSee('Scheduled review')
+            ->assertDontSee('Cancelled check')
+            ->assertSee('name="status"', false)
+            ->assertSee('At the clinic')
+            ->assertSee('No-show')
+            ->assertDontSee('value="consultations"', false)
+            ->assertDontSee('>Upcoming<', false);
+
+        $this->actingAs($patient)
+            ->get(route('patient.history', ['visit' => 'consultation', 'status' => 'completed']))
+            ->assertOk()
+            ->assertSee('First consultation')
+            ->assertDontSee('Scheduled review')
+            ->assertDontSee('Cancelled check');
+
+        $this->actingAs($patient)
+            ->get(route('patient.history', ['status' => 'confirmed']))
+            ->assertOk()
+            ->assertSee('Scheduled review')
+            ->assertDontSee('First consultation')
+            ->assertDontSee('Cancelled check');
+
+        $this->actingAs($patient)
+            ->get(route('patient.history', ['status' => 'cancelled']))
+            ->assertOk()
+            ->assertSee('Cancelled check')
+            ->assertDontSee('Scheduled review');
+
+        $this->actingAs($patient)
+            ->get(route('patient.history.show', $recorded))
+            ->assertOk()
+            ->assertSee('Come back for a reading.')
+            ->assertSee('Next review');
+    }
+
     /**
      * @return array{0: User, 1: Doctor, 2: string}
      */

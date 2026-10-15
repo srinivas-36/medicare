@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Appointment;
+use App\Models\Consultation;
 use App\Models\Doctor;
 use App\Models\TimeSlot;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -110,8 +112,10 @@ class DashboardWorkspaceTest extends TestCase
         ]);
 
         $start = now()->copy()->endOfDay()->subMinutes(2);
+        $followUpOn = now()->addDays(7)->toDateString();
+        $followUpLabel = Carbon::parse($followUpOn)->format('d M Y');
 
-        Appointment::query()->create([
+        $appointment = Appointment::query()->create([
             'patient_id' => $patient->id,
             'doctor_id' => $doctor->id,
             'appointment_date' => $start->toDateString(),
@@ -121,6 +125,14 @@ class DashboardWorkspaceTest extends TestCase
             'visit_type' => 'consultation',
             'ticket_price' => 150,
             'payment_status' => 'paid',
+        ]);
+
+        Consultation::query()->create([
+            'appointment_id' => $appointment->id,
+            'doctor_id' => $doctor->id,
+            'patient_id' => $patient->id,
+            'follow_up_on' => $followUpOn,
+            'follow_up_instructions' => 'Review blood pressure',
         ]);
 
         $this->actingAs($user)
@@ -138,6 +150,10 @@ class DashboardWorkspaceTest extends TestCase
             ->assertSee('Better care brighter tomorrows')
             ->assertSee('Need help?')
             ->assertSee('Consultations')
+            ->assertSee('data-mix="Follow-ups" data-count="1"', false)
+            ->assertSee('1 scheduled follow-up is included.', false)
+            ->assertSee('Next '.$followUpLabel)
+            ->assertSee('Follow-up '.$followUpLabel)
             ->assertSee('₹150')
             ->assertDontSee('John Smith');
 
@@ -147,6 +163,21 @@ class DashboardWorkspaceTest extends TestCase
             ->assertSee('Visits this week')
             ->assertSee('Visit mix')
             ->assertDontSee('No openings on this day.');
+
+        $this->actingAs($user)
+            ->get(route('doctor.appointments'))
+            ->assertOk()
+            ->assertSee('Next review '.$followUpLabel);
+
+        $this->actingAs($user)
+            ->get(route('doctor.patients.show', $patient))
+            ->assertOk()
+            ->assertSee('Follow-up '.$followUpLabel.': Review blood pressure')
+            ->assertSee('Visit history')
+            ->assertSee('Review previous appointments and clinical notes.')
+            ->assertSee('Search visits, symptoms or notes...')
+            ->assertSee('All visit types')
+            ->assertSee('All statuses');
 
         $this->actingAs($user)->get(route('doctor.consultations'))->assertOk()->assertSee('Srinivas Balam');
         $this->actingAs($user)->get(route('doctor.services'))->assertOk()->assertSee('₹150');

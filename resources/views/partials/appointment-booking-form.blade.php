@@ -13,6 +13,16 @@
         : asset($photo ?: 'images/avatar-icon.png');
     $rating = number_format((float) data_get($doctor, 'averageRating', 0), 1);
     $reviews = (int) data_get($doctor, 'totalRating', 0);
+    $reviewState = [
+        'reviews' => [],
+        'average' => $rating,
+        'total' => $reviews,
+        'doctorId' => $doctorId,
+        'pollUrl' => $doctorId ? route('doctors.reviews.index', $doctorId) : null,
+        'canWrite' => false,
+        'page' => 1,
+        'lastPage' => 1,
+    ];
     $fee = data_get($doctor, 'ticketPrice', 0);
     $duration = max(5, (int) data_get($doctor, 'appointmentDuration', 30));
     $timezoneLabel = \App\Services\AppointmentBooking::clinicNow()->getTimezone()->getName();
@@ -75,14 +85,16 @@
                         {{ $specialty }}
                     </p>
                 @endif
-                <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-body">
-                    <span class="inline-flex items-center gap-1.5 font-semibold text-navy">
+                <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-body" x-data="doctorReviews(@js($reviewState))">
+                    <span class="inline-flex items-center gap-1.5 font-semibold text-navy" x-show="total > 0" @if ($reviews === 0) x-cloak @endif>
                         <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
                         <x-ui.icon name="star" class="h-4 w-4 text-amber-400" />
-                        {{ $rating }} ({{ $reviews }} {{ $reviews === 1 ? 'review' : 'reviews' }})
+                        <span x-text="average">{{ $rating }}</span>
+                        (<span x-text="total">{{ $reviews }}</span>
+                        <span x-text="total === 1 ? 'review' : 'reviews'">{{ $reviews === 1 ? 'review' : 'reviews' }}</span>)
                     </span>
                     @if ($experienceLine)
-                        <span class="text-muted" aria-hidden="true">·</span>
+                        <span class="text-muted" aria-hidden="true" x-show="total > 0" @if ($reviews === 0) x-cloak @endif>·</span>
                         <span>{{ $experienceLine }}</span>
                     @endif
                 </p>

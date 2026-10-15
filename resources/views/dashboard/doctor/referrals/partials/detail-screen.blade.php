@@ -82,10 +82,12 @@
         <h1 class="mt-1 text-[28px] font-semibold leading-tight tracking-tight text-heading">Referral details</h1>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-3 text-sm font-semibold {{ $statusTone }}">
-            <x-ui.icon name="{{ $statusIcon }}" class="h-4 w-4" />
-            {{ $status }}
-        </span>
+        @if ($statusValue !== 'sent')
+            <span class="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-3 text-sm font-semibold {{ $statusTone }}">
+                <x-ui.icon name="{{ $statusIcon }}" class="h-4 w-4" />
+                {{ $status }}
+            </span>
+        @endif
         <a href="{{ route('doctor.referrals') }}" class="btn-secondary">
             <x-ui.icon name="chevron-left" class="h-4 w-4" />
             Back to referrals

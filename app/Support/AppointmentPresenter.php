@@ -12,7 +12,7 @@ class AppointmentPresenter
     public const STATUS_LABELS = [
         'pending' => 'Pending',
         'confirmed' => 'Confirmed',
-        'checked_in' => 'Checked in',
+        'checked_in' => 'At the clinic',
         'completed' => 'Completed',
         'cancelled' => 'Cancelled',
         'no_show' => 'No-show',
@@ -127,6 +127,7 @@ class AppointmentPresenter
             'doctor' => $appointment->doctor?->user?->name ?? 'Doctor',
             'time' => self::time($appointment->appointment_time),
             'date' => self::date($appointment->appointment_date),
+            'iso' => $appointment->appointment_date?->toDateString() ?? '',
             'type' => self::VISIT_LABELS[$appointment->visit_type] ?? ucfirst((string) $appointment->visit_type),
             'status' => self::STATUS_LABELS[$appointment->status] ?? ucfirst((string) $appointment->status),
             'status_value' => $appointment->status,

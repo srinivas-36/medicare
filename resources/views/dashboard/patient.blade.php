@@ -13,7 +13,7 @@
     $statusClass = [
         'Confirmed' => 'bg-[#ECFDF3] text-[#15803D]',
         'Pending' => 'bg-[#FFFBEB] text-[#B45309]',
-        'Checked in' => 'bg-[#E8F2FF] text-[#1D4ED8]',
+        'At the clinic' => 'bg-[#ECFDF3] text-[#15803D]',
         'Completed' => 'bg-[#E8F2FF] text-[#1D4ED8]',
         'Cancelled' => 'bg-red-50 text-[#B91C1C]',
         'No-show' => 'bg-red-50 text-[#B91C1C]',
@@ -94,13 +94,10 @@
                                 <x-ui.icon name="calendar" class="h-4 w-4 text-[#64748B]" />
                                 Reschedule
                             </a>
-                            <form method="POST" action="{{ route('patient.bookings.cancel', $next['id']) }}" data-confirm="This visit will be cancelled and the time will open again." data-confirm-title="Cancel this appointment?" data-confirm-ok="Cancel appointment" data-confirm-tone="danger">
-                                @csrf
-                                <button type="submit" class="inline-flex h-10 items-center gap-2 px-2 text-sm font-semibold text-[#DC2626]">
-                                    <x-ui.icon name="trash" class="h-4 w-4" />
-                                    Cancel
-                                </button>
-                            </form>
+                            <a href="{{ route('patient.bookings.show', $next['id']) }}#cancel" class="inline-flex h-10 items-center gap-2 px-2 text-sm font-semibold text-[#DC2626] no-underline">
+                                <x-ui.icon name="trash" class="h-4 w-4" />
+                                Cancel
+                            </a>
                         @endif
                     </div>
                 </div>

@@ -57,7 +57,8 @@
                         </div>
                         <div>
                             <label for="new-age" class="label">Age</label>
-                            <input id="new-age" type="number" name="age" min="0" max="120" x-model="newAge" :disabled="patientMode !== 'new'" :required="patientMode === 'new'" class="field">
+                            <input id="new-age" type="text" name="age" inputmode="numeric" maxlength="2" pattern="[0-9]{2}" title="Enter a 2-digit age using numbers only." x-model="newAge" @input="newAge = String(newAge).replace(/\D/g, '').slice(0, 2)" :disabled="patientMode !== 'new'" :required="patientMode === 'new'" class="field" autocomplete="off">
+                            <p class="mt-2 text-xs leading-5 text-muted">Enter a 2-digit age using numbers only.</p>
                         </div>
                         <div>
                             <label for="new-gender" class="label">Gender</label>

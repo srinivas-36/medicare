@@ -9,7 +9,7 @@
     $next = $next ?? null;
     $recent = $recent ?? [];
     $counts = $counts ?? ['today' => 0, 'upcoming' => 0, 'completed' => 0, 'pending' => 0, 'upcomingHint' => 'No upcoming visits'];
-    $overview = $overview ?? ['consultations' => 0, 'followups' => 0, 'newPatients' => 0, 'revenue' => '₹0'];
+    $overview = $overview ?? ['consultations' => 0, 'followups' => 0, 'followupsHint' => 'None scheduled', 'newPatients' => 0, 'revenue' => '₹0'];
     $hour = (int) now()->format('G');
     $greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
     $card = 'rounded-2xl border border-[#E7EEF6] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_rgba(15,23,42,0.04)]';
@@ -17,7 +17,7 @@
         return match ($status) {
             'Confirmed' => 'bg-[#E7F8EE] text-[#16A34A]',
             'Pending' => 'bg-[#FFF6E8] text-[#D97706]',
-            'Checked in' => 'bg-[#E8F2FF] text-[#1D4ED8]',
+            'At the clinic' => 'bg-[#ECFDF3] text-[#15803D]',
             'Completed' => 'bg-[#E8F2FF] text-[#1D4ED8]',
             'Cancelled', 'No-show' => 'bg-[#FEF2F2] text-[#DC2626]',
             default => 'bg-[#F4F7FB] text-[#64748B]',
@@ -25,7 +25,7 @@
     };
     $stats = [
         ['label' => "Today's visits", 'value' => $counts['today'], 'hint' => 'Scheduled for today', 'icon' => 'calendar', 'chip' => 'bg-[#E8F1FF] text-[#0067FF]', 'href' => route('doctor.appointments', ['date' => now()->toDateString()])],
-        ['label' => 'Upcoming', 'value' => $counts['upcoming'], 'hint' => $counts['upcomingHint'], 'icon' => 'clock', 'chip' => 'bg-[#FFF4E8] text-[#F59E0B]', 'href' => route('doctor.appointments', ['tab' => 'upcoming'])],
+        ['label' => 'Upcoming', 'value' => $counts['upcoming'], 'hint' => $counts['upcomingHint'], 'icon' => 'clock', 'chip' => 'bg-[#FFF4E8] text-[#F59E0B]', 'href' => route('doctor.appointments')],
         ['label' => 'Completed today', 'value' => $counts['completed'], 'hint' => 'Visits completed', 'icon' => 'check', 'chip' => 'bg-[#E8F8EF] text-[#22C55E]', 'href' => route('doctor.appointments', ['tab' => 'completed', 'date' => now()->toDateString()])],
         ['label' => 'Pending requests', 'value' => $counts['pending'], 'hint' => 'Awaiting your decision', 'icon' => 'user', 'chip' => 'bg-[#FDECEC] text-[#EF4444]', 'href' => route('doctor.appointments', ['status' => 'pending'])],
     ];
@@ -114,28 +114,40 @@
                         <div class="mt-4 flex min-h-[9rem] flex-1 items-end gap-2">
                             @foreach ($activity['days'] as $bar)
                                 @php
+                                    $visitCount = (int) ($bar['visits'] ?? $bar['count']);
+                                    $followCount = (int) ($bar['followups'] ?? 0);
                                     $barHeight = $bar['count'] === 0 ? 8 : max(18, (int) round(($bar['count'] / $peak) * 100));
+                                    $tip = $visitCount.' '.($visitCount === 1 ? 'visit' : 'visits');
+                                    if ($followCount > 0) {
+                                        $tip .= ' · '.$followCount.' '.($followCount === 1 ? 'follow-up' : 'follow-ups');
+                                    }
                                 @endphp
                                 <div class="group flex h-full min-w-0 flex-1 flex-col items-center gap-2">
                                     <div class="relative w-full flex-1">
                                         <div
-                                            class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-[2rem] rounded-t-md {{ $bar['current'] ? 'bg-[#0067FF]' : 'bg-[#D6E4FF]' }}"
+                                            class="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-[2rem] flex-col justify-end overflow-hidden rounded-t-md"
                                             style="height: {{ $barHeight }}%"
                                         >
-                                            <span class="pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#0F172A] px-2 py-1 text-[11px] font-semibold text-white group-hover:block">{{ $bar['count'] }} {{ $bar['count'] === 1 ? 'visit' : 'visits' }}</span>
+                                            @if ($followCount > 0)
+                                                <div class="w-full bg-[#7C3AED]" style="flex: {{ $followCount }} 1 0"></div>
+                                            @endif
+                                            @if ($visitCount > 0 || $followCount === 0)
+                                                <div class="w-full {{ $bar['current'] ? 'bg-[#0067FF]' : 'bg-[#D6E4FF]' }}" style="flex: {{ max($visitCount, 1) }} 1 0"></div>
+                                            @endif
+                                            <span class="pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#0F172A] px-2 py-1 text-[11px] font-semibold text-white group-hover:block">{{ $tip }}</span>
                                         </div>
                                     </div>
                                     <span class="shrink-0 text-[11px] font-medium {{ $bar['current'] ? 'text-[#0067FF]' : 'text-[#94A3B8]' }}">{{ $bar['label'] }}</span>
                                 </div>
                             @endforeach
                         </div>
-                        <p class="mt-3 shrink-0 text-xs text-[#64748B]">{{ $activity['total'] }} {{ $activity['total'] === 1 ? 'visit' : 'visits' }} booked from {{ $activity['range'] }}.</p>
+                        <p class="mt-3 shrink-0 text-xs text-[#64748B]">{{ $activity['total'] }} {{ $activity['total'] === 1 ? 'visit' : 'visits' }} booked from {{ $activity['range'] }}. @if (($activity['scheduledFollowUps'] ?? 0) > 0){{ $activity['scheduledFollowUps'] }} scheduled {{ ($activity['scheduledFollowUps'] ?? 0) === 1 ? 'follow-up is' : 'follow-ups are' }} included.@endif</p>
                     </div>
                     <div class="flex flex-col justify-center">
                         <p class="text-sm font-semibold text-[#0F172A]">Visit mix</p>
                         <ul class="mt-4 space-y-3">
                             @foreach ($activity['mix'] as $item)
-                                <li>
+                                <li data-mix="{{ $item['label'] }}" data-count="{{ $item['count'] }}">
                                     <div class="flex items-center justify-between gap-3 text-xs">
                                         <span class="font-medium text-[#475569]">{{ $item['label'] }}</span>
                                         <span class="font-semibold text-[#0F172A]">{{ $item['count'] }}</span>
@@ -155,7 +167,7 @@
             <section class="{{ $card }} p-4 sm:p-5">
                 <div class="flex items-center justify-between gap-3">
                     <h2 class="text-[15px] font-semibold text-[#0F172A]">Next Appointment</h2>
-                    <a href="{{ route('doctor.appointments', ['tab' => 'upcoming']) }}" class="inline-flex items-center gap-1 text-sm font-semibold text-[#0067FF] no-underline hover:text-[#0052CC]">
+                    <a href="{{ route('doctor.appointments') }}" class="inline-flex items-center gap-1 text-sm font-semibold text-[#0067FF] no-underline hover:text-[#0052CC]">
                         View all
                         <x-ui.icon name="arrow" class="h-3.5 w-3.5" />
                     </a>
@@ -256,7 +268,12 @@
                                         </a>
                                     </td>
                                     <td class="px-3 py-3 text-[#475569]">{{ $row['when'] }}</td>
-                                    <td class="px-3 py-3 text-[#475569]">{{ $row['visit'] }}</td>
+                                    <td class="px-3 py-3 text-[#475569]">
+                                        <span class="block">{{ $row['visit'] }}</span>
+                                        @if (filled($row['follow_up'] ?? null))
+                                            <span class="mt-1 block text-xs font-medium text-[#7C3AED]">Follow-up {{ $row['follow_up'] }}</span>
+                                        @endif
+                                    </td>
                                     <td class="px-3 py-3">
                                         <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold {{ $pill($row['status']) }}">{{ $row['status'] }}</span>
                                     </td>
@@ -301,6 +318,7 @@
                         </span>
                         <span class="text-2xl font-bold text-[#0F172A]">{{ $overview['followups'] }}</span>
                     </p>
+                    <p class="mt-1 text-[11px] text-[#94A3B8]">{{ $overview['followupsHint'] ?? 'None scheduled' }}</p>
                 </div>
                 <div>
                     <p class="text-xs font-medium text-[#64748B]">New Patients</p>

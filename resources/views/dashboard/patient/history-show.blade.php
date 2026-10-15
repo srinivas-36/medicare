@@ -25,8 +25,8 @@
         @if ($appointment->status === 'completed' && $appointment->consultation)
             <p><span class="font-semibold text-heading">Diagnosis.</span> {{ $appointment->consultation->diagnosis ?: 'Not published' }}</p>
             <p class="whitespace-pre-line"><span class="font-semibold text-heading">Plan.</span> {{ $appointment->consultation->plan ?: 'Not published' }}</p>
-            @if ($appointment->consultation->follow_up_instructions)
-                <p class="whitespace-pre-line"><span class="font-semibold text-heading">Follow-up.</span> {{ $appointment->consultation->follow_up_instructions }}</p>
+            @if ($appointment->consultation->follow_up_on || $appointment->consultation->follow_up_instructions)
+                <p class="whitespace-pre-line"><span class="font-semibold text-heading">Follow-up.</span>@if ($appointment->consultation->follow_up_on) Next review {{ $appointment->consultation->follow_up_on->format('d M Y') }}.@endif {{ $appointment->consultation->follow_up_instructions }}</p>
             @endif
         @else
             <p class="text-sm text-text">A consultation summary appears here after the doctor completes the visit.</p>

@@ -25,12 +25,19 @@ class AppointmentController extends Controller
     {
         $doctor = $this->doctor($request);
 
+        if ($request->query('tab') === 'upcoming') {
+            $query = $request->query();
+            unset($query['tab']);
+
+            return redirect()->route('doctor.appointments', $query);
+        }
+
         if ($redirect = AppointmentPage::redirectCanonical($request)) {
             return $redirect;
         }
 
         $filters = AppointmentPage::filters($request);
-        $query = $doctor->appointments()->with('patient');
+        $query = $doctor->appointments()->with(['patient', 'consultation']);
         $hasAny = $doctor->appointments()->exists();
         AppointmentPage::apply($query, $filters, 'patient');
         $query->orderByDesc('appointment_date')->orderByDesc('appointment_time');
@@ -42,6 +49,10 @@ class AppointmentController extends Controller
         return view('dashboard.appointments.index', [
             'role' => 'doctor',
             'appointments' => $query->paginate(15)->withQueryString(),
+            'followUps' => Consultation::query()
+                ->where('doctor_id', $doctor->id)
+                ->whereNotNull('follow_up_on')
+                ->get(['appointment_id', 'patient_id', 'follow_up_on']),
             'filters' => $filters,
             'filtersActive' => AppointmentPage::active($filters),
             'hasAny' => $hasAny,
@@ -136,11 +147,22 @@ class AppointmentController extends Controller
 
         $consultation->doctor_id = $doctor->id;
         $consultation->patient_id = $appointment->patient_id;
-        $consultation->clinical_notes = $request->validated('clinical_notes');
-        $consultation->diagnosis = $request->validated('diagnosis');
-        $consultation->plan = $request->validated('plan');
-        $consultation->follow_up_instructions = $request->validated('follow_up_instructions');
-        $consultation->follow_up_on = $request->validated('follow_up_on');
+
+        $saved = false;
+
+        foreach (['clinical_notes', 'diagnosis', 'plan', 'follow_up_instructions', 'follow_up_on'] as $field) {
+            if (! $request->exists($field)) {
+                continue;
+            }
+
+            $consultation->{$field} = $request->validated($field);
+            $saved = true;
+        }
+
+        if (! $saved) {
+            return back();
+        }
+
         $consultation->save();
 
         return back()->with('status', 'Consult saved.');
@@ -184,7 +206,9 @@ class AppointmentController extends Controller
         abort_unless((int) $report->appointment_id === (int) $appointment->id, 404);
         abort_unless(MedicalFile::exists($report->path), 404);
 
-        return MedicalFile::response($report->path, $report->original_name);
+        return $request->boolean('download')
+            ? MedicalFile::download($report->path, $report->original_name)
+            : MedicalFile::response($report->path, $report->original_name);
     }
 
     private function doctor(Request $request): Doctor

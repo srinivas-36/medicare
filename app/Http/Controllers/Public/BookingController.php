@@ -10,6 +10,7 @@ use App\Models\DoctorExperience;
 use App\Models\TimeSlot;
 use App\Services\AppointmentBooking;
 use App\Services\AppointmentReports;
+use App\Support\DoctorReviews;
 use App\Support\MedicalFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -105,9 +106,10 @@ class BookingController extends Controller
         }
 
         $doctor->load(['user', 'experiences', 'timeSlots']);
+        $summary = DoctorReviews::summary($doctor);
 
         return [
-            'doctor' => $this->present($doctor),
+            'doctor' => $this->present($doctor, $summary),
             'openSlots' => $this->booking->calendar($doctor),
             'draftReports' => array_map(
                 fn (array $file) => (string) ($file['original_name'] ?? 'Report'),
@@ -349,9 +351,10 @@ class BookingController extends Controller
     }
 
     /**
+     * @param  array{average: string, total: int}  $summary
      * @return array<string, mixed>
      */
-    private function present(Doctor $doctor): array
+    private function present(Doctor $doctor, array $summary): array
     {
         return [
             'id' => $doctor->id,
@@ -359,8 +362,8 @@ class BookingController extends Controller
             'name' => $doctor->user?->name,
             'specialization' => $doctor->specialization,
             'photo' => $doctor->user?->photo,
-            'averageRating' => $doctor->average_rating,
-            'totalRating' => $doctor->total_rating,
+            'averageRating' => $summary['average'],
+            'totalRating' => $summary['total'],
             'ticketPrice' => $doctor->ticketPrice,
             'about' => $doctor->about,
             'bio' => $doctor->bio,

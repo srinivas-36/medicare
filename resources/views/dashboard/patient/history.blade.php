@@ -15,7 +15,7 @@
             'completed' => ['label' => 'Completed', 'class' => 'bg-[#E7F8EE] text-[#16A34A]', 'icon' => 'check'],
             'confirmed' => ['label' => 'Confirmed', 'class' => 'bg-[#E8F2FF] text-[#2563EB]', 'icon' => 'calendar'],
             'pending' => ['label' => 'Pending', 'class' => 'bg-[#FFFBEB] text-[#B45309]', 'icon' => 'clock'],
-            'checked_in' => ['label' => 'Checked in', 'class' => 'bg-[#E8F2FF] text-[#2563EB]', 'icon' => 'check'],
+            'checked_in' => ['label' => 'At the clinic', 'class' => 'bg-[#ECFDF3] text-[#15803D]', 'icon' => 'check'],
             'cancelled' => ['label' => 'Cancelled', 'class' => 'bg-[#FEF2F2] text-[#DC2626]', 'icon' => 'close'],
             'no_show' => ['label' => 'No-show', 'class' => 'bg-[#FEF2F2] text-[#DC2626]', 'icon' => 'close'],
         ];
@@ -92,11 +92,11 @@
             <label class="min-w-[150px] flex-1 text-[13px] font-medium text-[#64748B]">
                 Status
                 <span class="relative mt-1.5 block">
-                    <select name="scope" class="field h-11 w-full appearance-none bg-white bg-none pr-9 text-[#181A1E]">
-                        <option value="">All records</option>
-                        <option value="consultations" @selected($filters['scope'] === 'consultations')>Completed</option>
-                        <option value="upcoming" @selected($filters['scope'] === 'upcoming')>Upcoming</option>
-                        <option value="cancelled" @selected($filters['scope'] === 'cancelled')>Cancelled</option>
+                    <select name="status" class="field h-11 w-full appearance-none bg-white bg-none pr-9 text-[#181A1E]">
+                        <option value="">All statuses</option>
+                        @foreach (['pending' => 'Pending', 'confirmed' => 'Confirmed', 'checked_in' => 'At the clinic', 'completed' => 'Completed', 'cancelled' => 'Cancelled', 'no_show' => 'No-show'] as $value => $label)
+                            <option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ $label }}</option>
+                        @endforeach
                     </select>
                     <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
                         <x-ui.icon name="chevron" class="h-4 w-4" />
@@ -162,6 +162,8 @@
                 ];
                 $specialty = $visit->doctor?->specialization ?: 'Specialist';
                 $visitLabel = $visitLabels[$visit->visit_type] ?? ucfirst((string) str_replace('-', ' ', (string) $visit->visit_type));
+                $followUpOn = $visit->consultation?->follow_up_on;
+                $followUpNote = trim((string) ($visit->consultation?->follow_up_instructions ?? ''));
                 $reportCount = $visit->reports->count();
                 $reportNames = $visit->reports
                     ->map(function ($report) {
@@ -201,6 +203,9 @@
                                 </div>
                                 <p class="mt-0.5 text-sm text-[#64748B]">
                                     {{ $specialty }}<span class="px-1.5 text-[#CBD5E1]">·</span>{{ $visitLabel }}
+                                    @if ($followUpOn || $followUpNote !== '')
+                                        <span class="px-1.5 text-[#CBD5E1]">·</span>Follow-up{{ $followUpOn ? ' '.$followUpOn->format('d M Y') : '' }}
+                                    @endif
                                 </p>
                                 <div class="mt-2.5 flex flex-wrap items-center gap-x-6 gap-y-1.5 text-sm text-[#334155]">
                                     <span class="inline-flex min-w-0 items-center gap-2">

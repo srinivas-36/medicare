@@ -110,30 +110,38 @@ class SlotAvailabilityTest extends TestCase
 
         $first = Appointment::query()->where('patient_id', $patient->id)->first();
 
+        $later = '2026-10-21';
+
         $this->actingAs($patient)
             ->get(route('patient.bookings.show', $first))
             ->assertOk()
             ->assertSee('Appointment details')
             ->assertSee('Available dates')
             ->assertSee('Available time slots')
-            ->assertSee('id="reschedule-open-slots"', false);
+            ->assertSee('Current booking', false)
+            ->assertSee('data-booked-date="'.$date.'"', false)
+            ->assertSee('id="reschedule-open-slots"', false)
+            ->assertDontSee('"'.$date.'":', false);
 
         $this->actingAs($patient)
             ->post(route('patient.bookings.reschedule', $first), [
                 'slot' => $date.'|14:00',
             ])
-            ->assertSessionHasErrors('time');
+            ->assertSessionHasErrors('date');
 
         $this->actingAs($second)
-            ->post(route('patient.bookings.cancel', Appointment::query()->where('patient_id', $second->id)->first()))
+            ->post(route('patient.bookings.cancel', Appointment::query()->where('patient_id', $second->id)->first()), [
+                'cancel_reason' => 'Cannot attend',
+            ])
             ->assertRedirect();
 
         $this->actingAs($patient)
             ->post(route('patient.bookings.reschedule', $first), [
-                'slot' => $date.'|14:00',
+                'slot' => $later.'|14:00',
             ])
             ->assertRedirect();
 
+        $this->assertSame($later, $first->fresh()->appointment_date->toDateString());
         $this->assertSame('14:00:00', $first->fresh()->appointment_time);
         $this->assertSame('15:00:00', $first->fresh()->ending_time);
 

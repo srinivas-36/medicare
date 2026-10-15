@@ -37,12 +37,14 @@ class DoctorReviews
                 ->paginate(self::PER_PAGE, ['*'], 'page', max(1, $paginator->lastPage()));
         }
 
+        $summary = self::summary($doctor);
+
         return [
             'reviews' => $paginator->getCollection()
                 ->map(fn (DoctorReview $review) => self::present($review))
                 ->values()
                 ->all(),
-            'average' => number_format((float) $doctor->average_rating, 1),
+            'average' => $summary['average'],
             'total' => (int) $paginator->total(),
             'page' => $paginator->currentPage(),
             'lastPage' => max(1, $paginator->lastPage()),
@@ -153,6 +155,28 @@ class DoctorReviews
         $review->setRelation('user', $patient);
 
         return $review;
+    }
+
+    /**
+     * Average and count from submitted reviews, not the catalog columns.
+     *
+     * @return array{average: string, total: int}
+     */
+    public static function summary(Doctor $doctor): array
+    {
+        $stats = DoctorReview::query()
+            ->where('doctor_id', $doctor->id)
+            ->toBase()
+            ->selectRaw('COUNT(*) as aggregate_total, AVG(rating) as aggregate_average')
+            ->first();
+
+        $total = (int) ($stats->aggregate_total ?? 0);
+        $average = $total > 0 ? round((float) $stats->aggregate_average, 2) : 0;
+
+        return [
+            'average' => number_format($average, 1),
+            'total' => $total,
+        ];
     }
 
     public static function profilePageUrl(Doctor $doctor, int $page): ?string

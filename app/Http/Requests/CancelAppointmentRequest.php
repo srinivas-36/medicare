@@ -18,7 +18,17 @@ class CancelAppointmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'cancel_reason' => ['nullable', 'string', 'max:255'],
+            'cancel_reason' => ['required', 'string', 'max:255'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'cancel_reason.required' => 'Enter a reason for cancelling this appointment.',
         ];
     }
 }

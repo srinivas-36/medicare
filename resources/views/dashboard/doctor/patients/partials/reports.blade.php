@@ -8,7 +8,7 @@
                     <x-ui.icon name="file" class="h-4 w-4" />
                 </span>
                 <span class="min-w-0 flex-1 text-sm text-[#181A1E]">{{ $visit['date'] }} · {{ $visit['reports'] }} {{ \Illuminate\Support\Str::plural('file', $visit['reports']) }}</span>
-                <a href="{{ route('doctor.appointments.show', $visit['id']) }}" class="shrink-0 text-sm font-semibold text-[#0067FF] no-underline">Open</a>
+                <button type="button" class="shrink-0 text-sm font-semibold text-[#0067FF]" @click="openReports(@js($visit['report_files'] ?? []), @js($visit['date'].' reports'))">Open</button>
             </li>
         @endforeach
     </ul>

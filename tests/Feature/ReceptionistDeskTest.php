@@ -190,6 +190,61 @@ class ReceptionistDeskTest extends TestCase
         $this->assertSame('confirmed', $otherAppointment->fresh()->status);
     }
 
+    public function test_receptionist_sees_the_assigned_doctors_patients(): void
+    {
+        [, $doctor] = $this->makeDoctor();
+        [, $other] = $this->makeDoctor('Dr Other Clinic', 'other-clinic');
+        $own = User::factory()->create([
+            'name' => 'Front Desk Patient',
+            'role' => 'patient',
+            'email' => 'front.patient@example.com',
+            'phone' => '555-0100',
+        ]);
+        $visited = User::factory()->create([
+            'name' => 'Return Visit',
+            'role' => 'patient',
+            'email' => 'return.visit@example.com',
+        ]);
+        $stranger = User::factory()->create([
+            'name' => 'Other Clinic Patient',
+            'role' => 'patient',
+            'email' => 'other.clinic@example.com',
+        ]);
+        $doctor->registeredPatients()->attach($own->id);
+        Appointment::query()->create([
+            'patient_id' => $visited->id,
+            'doctor_id' => $doctor->id,
+            'appointment_date' => today()->toDateString(),
+            'appointment_time' => '10:00:00',
+            'status' => 'confirmed',
+            'visit_type' => 'consultation',
+        ]);
+        Appointment::query()->create([
+            'patient_id' => $stranger->id,
+            'doctor_id' => $other->id,
+            'appointment_date' => today()->toDateString(),
+            'appointment_time' => '11:00:00',
+            'status' => 'confirmed',
+            'visit_type' => 'consultation',
+        ]);
+        $receptionist = User::factory()->create(['role' => 'receptionist']);
+        $receptionist->receptionist()->create(['doctor_id' => $doctor->id]);
+
+        $this->actingAs($receptionist)
+            ->get(route('receptionist.patients'))
+            ->assertOk()
+            ->assertSee('Front Desk Patient')
+            ->assertSee('front.patient@example.com')
+            ->assertSee('Return Visit')
+            ->assertDontSee('Other Clinic Patient');
+
+        $this->actingAs($receptionist)
+            ->get(route('receptionist.patients', ['q' => 'Return']))
+            ->assertOk()
+            ->assertSee('Return Visit')
+            ->assertDontSee('Front Desk Patient');
+    }
+
     public function test_receptionist_patient_search_stays_on_the_desk(): void
     {
         [, $doctor] = $this->makeDoctor();
@@ -331,7 +386,8 @@ class ReceptionistDeskTest extends TestCase
         $this->actingAs($receptionist)
             ->get(route('receptionist.appointments.create', ['mode' => 'new']))
             ->assertOk()
-            ->assertSee('New patient');
+            ->assertSee('New patient')
+            ->assertSee('pattern="[0-9]{2}"', false);
 
         $this->actingAs($receptionist)
             ->post(route('receptionist.appointments.store'), [
@@ -339,7 +395,23 @@ class ReceptionistDeskTest extends TestCase
                 'name' => 'Walk In Patient',
                 'email' => 'walk.in@example.com',
                 'phone' => '555-0177',
-                'age' => 29,
+                'age' => '2a',
+                'gender' => 'female',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+                'date' => $later,
+                'slot' => '09:00|12:00',
+                'visit_type' => 'consultation',
+            ])
+            ->assertSessionHasErrors('age');
+
+        $this->actingAs($receptionist)
+            ->post(route('receptionist.appointments.store'), [
+                'patient_mode' => 'new',
+                'name' => 'Walk In Patient',
+                'email' => 'walk.in@example.com',
+                'phone' => '555-0177',
+                'age' => '29',
                 'gender' => 'female',
                 'password' => 'password',
                 'password_confirmation' => 'password',
@@ -388,6 +460,103 @@ class ReceptionistDeskTest extends TestCase
             ->assertOk()
             ->assertSee('Booked by the patient')
             ->assertDontSee('Added by Nora Desk');
+    }
+
+    public function test_receptionist_calendar_view_checks_in_and_reschedules_only_after_the_booked_date(): void
+    {
+        [, $doctor, $date] = $this->makeDoctor();
+        $patient = User::factory()->create([
+            'name' => 'Front Desk Patient',
+            'role' => 'patient',
+            'phone' => '555-0100',
+        ]);
+        $receptionist = User::factory()->create(['role' => 'receptionist']);
+        $receptionist->receptionist()->create(['doctor_id' => $doctor->id]);
+
+        $appointment = Appointment::query()->create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'appointment_date' => $date,
+            'appointment_time' => '09:00:00',
+            'ending_time' => '12:00:00',
+            'status' => 'confirmed',
+            'visit_type' => 'consultation',
+        ]);
+
+        $this->actingAs($receptionist)
+            ->get(route('receptionist.appointments', ['range' => 'upcoming']))
+            ->assertOk()
+            ->assertSee('Calendar')
+            ->assertSee('Existing booking')
+            ->assertSee('bg-[#16A34A]', false)
+            ->assertSee('View · Front Desk Patient', false)
+            ->assertSee(route('receptionist.appointments.show', $appointment), false);
+
+        $this->actingAs($receptionist)
+            ->get(route('receptionist.appointments.show', $appointment))
+            ->assertOk()
+            ->assertSee('Check in')
+            ->assertSee('Reschedule')
+            ->assertSee('Existing booking')
+            ->assertSee('data-booked-date="'.$date.'"', false)
+            ->assertSee('Choose a day after the booked date.')
+            ->assertDontSee('"'.$date.'":', false);
+
+        $this->actingAs($receptionist)
+            ->post(route('receptionist.appointments.reschedule', $appointment), [
+                'slot' => $date.'|09:00',
+            ])
+            ->assertSessionHasErrors('date');
+
+        $this->actingAs($receptionist)
+            ->post(route('receptionist.appointments.reschedule', $appointment), [
+                'date' => now()->toDateString(),
+                'time' => '09:00',
+            ])
+            ->assertSessionHasErrors('date');
+
+        $this->assertSame($date, $appointment->fresh()->appointment_date->toDateString());
+
+        $later = now()->addDay()->addWeek()->toDateString();
+
+        $this->actingAs($receptionist)
+            ->post(route('receptionist.appointments.reschedule', $appointment), [
+                'slot' => $later.'|09:00',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertSame($later, $appointment->fresh()->appointment_date->toDateString());
+        $this->assertSame('09:00:00', $appointment->fresh()->appointment_time);
+
+        $this->actingAs($receptionist)
+            ->post(route('receptionist.appointments.update-status', $appointment), [
+                'status' => 'checked_in',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('checked_in', $appointment->fresh()->status);
+
+        $bookedOn = $appointment->fresh()->appointment_date->toDateString();
+        $afterBooked = $appointment->appointment_date->copy()->addWeek()->toDateString();
+
+        foreach (['checked_in', 'completed', 'cancelled'] as $status) {
+            $appointment->forceFill(['status' => $status])->save();
+
+            $this->actingAs($receptionist)
+                ->get(route('receptionist.appointments.show', $appointment))
+                ->assertOk()
+                ->assertDontSee('Reschedule')
+                ->assertDontSee('data-reschedule', false);
+
+            $this->actingAs($receptionist)
+                ->post(route('receptionist.appointments.reschedule', $appointment), [
+                    'slot' => $afterBooked.'|09:00',
+                ])
+                ->assertSessionHasErrors('date');
+
+            $this->assertSame($bookedOn, $appointment->fresh()->appointment_date->toDateString());
+        }
     }
 
     /**

@@ -44,6 +44,10 @@ return [
         ))),
     ],
 
+    'contact' => [
+        'inbox' => env('CONTACT_INBOX', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

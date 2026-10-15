@@ -257,7 +257,7 @@
                             </form>
                             <div class="mt-3 grid grid-cols-2 gap-2">
                                 <button type="submit" form="analysis-review" class="btn-secondary !px-3">Save draft</button>
-                                <button type="submit" form="analysis-approve" class="btn-primary !px-3">Approve for visit note</button>
+                                <button type="submit" form="analysis-approve" class="btn-primary !px-3">Approve</button>
                             </div>
                         </section>
 

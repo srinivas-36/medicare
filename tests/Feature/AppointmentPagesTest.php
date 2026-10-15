@@ -81,7 +81,8 @@ class AppointmentPagesTest extends TestCase
             ->get(route('doctor.appointments', $filters))
             ->assertOk()
             ->assertSee('Manage your patient visits and schedule.')
-            ->assertSee('Upcoming')
+            ->assertSee('At the clinic')
+            ->assertDontSee('>Upcoming<', false)
             ->assertSee('Clear date')
             ->assertDontSee('Time slot')
             ->assertDontSee('Patient name')
@@ -149,6 +150,13 @@ class AppointmentPagesTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Your bookings')
+            ->assertSee('Confirmed')
+            ->assertSee('At the clinic')
+            ->assertSee('Completed')
+            ->assertSee('>View<', false)
+            ->assertDontSee('>Payment<', false)
+            ->assertDontSee('>Upcoming<', false)
+            ->assertDontSee('>Past<', false)
             ->assertSee('Dr Maya Chen')
             ->assertSee('Cardiology')
             ->assertSee('1 appointment')
@@ -216,15 +224,13 @@ class AppointmentPagesTest extends TestCase
 
         $this->actingAs($doctorUser)
             ->get(route('doctor.appointments', ['tab' => 'upcoming', 'date' => '2026-10-14']))
+            ->assertRedirect(route('doctor.appointments', ['date' => '2026-10-14']));
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments'))
             ->assertOk()
-            ->assertSee('Future visit')
-            ->assertSee('tab=completed', false)
-            ->assertSee('date=2026-10-14', false)
-            ->assertSee('aria-selected="true"', false)
-            ->assertDontSee('Earlier today')
-            ->assertDontSee('Missed visit')
-            ->assertDontSee('Finished visit')
-            ->assertDontSee('Called off visit');
+            ->assertDontSee('>Upcoming<', false)
+            ->assertSee('View');
 
         $this->actingAs($doctorUser)
             ->get(route('doctor.appointments', ['tab' => 'completed']))
@@ -368,6 +374,34 @@ class AppointmentPagesTest extends TestCase
             ->assertDontSee('Reports suggest a tension pattern.')
             ->assertDontSee('Review the blood pressure.')
             ->assertDontSee('Health notes');
+    }
+
+    public function test_cancelled_visit_hides_the_more_actions_menu(): void
+    {
+        [$doctorUser, $doctor] = $this->makeDoctor('Dr Maya Chen');
+        $patient = $this->makePatient('Srinivas Balam');
+
+        $cancelled = $this->appointment($patient, $doctor, [
+            'status' => 'cancelled',
+            'reason' => 'Called off visit',
+        ]);
+        $confirmed = $this->appointment($patient, $doctor, [
+            'appointment_date' => '2026-10-13',
+            'status' => 'confirmed',
+        ]);
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments.show', $cancelled))
+            ->assertOk()
+            ->assertSee('Cancelled')
+            ->assertDontSee('More actions')
+            ->assertDontSee('Cancel appointment');
+
+        $this->actingAs($doctorUser)
+            ->get(route('doctor.appointments.show', $confirmed))
+            ->assertOk()
+            ->assertSee('More actions')
+            ->assertSee('Cancel appointment');
     }
 
     public function test_clearing_filters_returns_the_unfiltered_list(): void

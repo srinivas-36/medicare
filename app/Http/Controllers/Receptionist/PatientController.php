@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
+use App\Models\Appointment;
+use App\Models\Doctor;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class PatientController extends Controller
@@ -14,22 +17,9 @@ class PatientController extends Controller
     {
         abort_unless($request->user()->role === 'receptionist', 403);
 
-        $doctor = $request->user()->receptionist?->doctor;
-        $search = $request->string('q')->toString();
-        $patients = collect();
-
-        if ($doctor && $search !== '') {
-            $patients = User::query()
-                ->where('role', 'patient')
-                ->where(function ($query) use ($search) {
-                    $query->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%')
-                        ->orWhere('phone', 'like', '%'.$search.'%');
-                })
-                ->orderBy('name')
-                ->limit(30)
-                ->get();
-        }
+        $doctor = $request->user()->receptionist?->doctor?->load('user');
+        $search = trim($request->string('q')->toString());
+        $patients = $doctor ? $this->patientsFor($doctor, $search) : collect();
 
         return view('dashboard.receptionist.patients', [
             'doctorName' => $doctor?->user?->name,
@@ -69,5 +59,36 @@ class PatientController extends Controller
                 'phone' => $patient->phone,
             ])->values(),
         ]);
+    }
+
+    /**
+     * Patients linked to this doctor, or who already have a visit with them.
+     *
+     * @return Collection<int, User>
+     */
+    private function patientsFor(Doctor $doctor, string $search): Collection
+    {
+        $ids = Appointment::query()
+            ->where('doctor_id', $doctor->id)
+            ->distinct()
+            ->pluck('patient_id')
+            ->merge($doctor->registeredPatients()->pluck('users.id'))
+            ->unique()
+            ->filter()
+            ->values();
+
+        return User::query()
+            ->where('role', 'patient')
+            ->whereIn('id', $ids)
+            ->when($search !== '', function ($query) use ($search) {
+                $like = '%'.addcslashes($search, '%_\\').'%';
+                $query->where(function ($query) use ($like) {
+                    $query->where('name', 'like', $like)
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('phone', 'like', $like);
+                });
+            })
+            ->orderBy('name')
+            ->get();
     }
 }

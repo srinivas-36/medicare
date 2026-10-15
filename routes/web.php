@@ -18,6 +18,7 @@ use App\Http\Controllers\Patient\DashboardController as PatientDashboardControll
 use App\Http\Controllers\Patient\HistoryController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\BookingController as PublicBookingController;
+use App\Http\Controllers\Public\ContactController;
 use App\Http\Controllers\Public\DoctorController;
 use App\Http\Controllers\Public\ReviewController;
 use App\Http\Controllers\Public\StripeWebhookController;
@@ -37,7 +38,10 @@ Route::get('/', function () {
 
 Route::view('/about', 'public.about')->name('about');
 
-Route::view('/contact', 'public.contact')->name('contact');
+Route::get('/contact', [ContactController::class, 'create'])->name('contact');
+Route::post('/contact', [ContactController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('contact.store');
 
 Route::get('/services', function () {
     return view('public.services.index', [

@@ -107,10 +107,7 @@
             >
                 <div class="absolute inset-0 bg-[#0B1F3A]/50" @click="close()"></div>
 
-                <div
-                    class="relative flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-[0_24px_80px_rgba(11,31,58,0.28)] sm:max-h-[min(860px,92dvh)] sm:rounded-2xl"
-                    :class="view === 'list' ? 'sm:max-w-6xl' : 'sm:max-w-2xl'"
-                >
+                <div class="relative flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-[0_24px_80px_rgba(11,31,58,0.28)] sm:max-h-[min(860px,92dvh)] sm:max-w-3xl sm:rounded-2xl">
                     <div class="flex items-center gap-3 border-b border-line px-5 py-4">
                         <div class="min-w-0 flex-1">
                             <h2 id="refer-title" class="truncate text-lg font-semibold text-navy" x-text="view === 'profile' ? 'Doctor profile' : (view === 'note' ? 'Referral note' : (view === 'sent' ? 'Referral sent' : 'Choose a specialist'))">Choose a specialist</h2>
@@ -149,59 +146,42 @@
                                 </template>
                             </div>
 
-                            <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div class="mt-4 grid gap-3 sm:grid-cols-2">
                                 @foreach ($referralDoctors as $choice)
-                                    @php
-                                        $tone = match ($choice['specialization'] ?? '') {
-                                            'Cardiology' => 'from-[#FFECEE] to-[#FFF6F6]',
-                                            'Neurology' => 'from-[#E7F0FF] to-[#F5F9FF]',
-                                            'Endocrinology' => 'from-[#F3EEFF] to-[#F8F5FF]',
-                                            'Orthopedics' => 'from-[#FFF4E8] to-[#FFF9F2]',
-                                            'Dermatology' => 'from-[#FDEFF6] to-[#FFF7FB]',
-                                            'Gastroenterology' => 'from-[#E9F8F1] to-[#F4FBF7]',
-                                            'Pulmonology' => 'from-[#E7F6FF] to-[#F4FBFF]',
-                                            'ENT' => 'from-[#EEF2FF] to-[#F6F8FF]',
-                                            default => 'from-[#EAF3FF] to-[#F7FAFF]',
-                                        };
-                                    @endphp
                                     <article
-                                        class="flex h-full flex-col overflow-hidden rounded-2xl border border-[#E7EEF6] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)]"
+                                        class="flex gap-3 rounded-2xl border border-[#E7EEF6] bg-white p-3 shadow-[0_8px_20px_rgba(15,23,42,0.05)]"
                                         x-show="visible(@js($choice['id']))"
                                     >
-                                        <div class="relative flex h-40 items-center justify-center bg-gradient-to-br {{ $tone }}">
-                                            @if (! empty($choice['photo']))
-                                                <img src="{{ $choice['photo'] }}" alt="" class="h-full w-full object-cover object-top">
-                                            @else
-                                                <span class="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-white text-2xl font-semibold text-primary shadow-[0_8px_20px_rgba(15,23,42,0.08)]">{{ $choice['initials'] }}</span>
-                                            @endif
-                                            @if (! empty($choice['matched']))
-                                                <span class="absolute left-3 top-3 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-success shadow-sm">Matches this visit</span>
-                                            @endif
-                                        </div>
-                                        <div class="flex flex-1 flex-col p-4">
-                                            <h3 class="text-base font-semibold text-navy">{{ $choice['name'] }}</h3>
-                                            <p class="mt-1 text-sm font-semibold text-primary">{{ $choice['specialization'] ?: 'Specialty not listed' }}</p>
-                                            @if (($choice['degree'] ?? '') !== '')
-                                                <p class="mt-1 text-sm text-muted">{{ $choice['degree'] }}</p>
-                                            @endif
-                                            @if (($choice['clinic'] ?? '') !== '')
-                                                <p class="mt-1 text-sm text-body">{{ $choice['clinic'] }}</p>
+                                        @if (! empty($choice['photo']))
+                                            <img src="{{ $choice['photo'] }}" alt="" class="h-14 w-14 shrink-0 rounded-full object-cover object-top ring-2 ring-[#EAF3FF]">
+                                        @else
+                                            <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#EAF3FF] text-sm font-semibold text-primary">{{ $choice['initials'] }}</span>
+                                        @endif
+                                        <div class="flex min-w-0 flex-1 flex-col">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <div class="min-w-0">
+                                                    <h3 class="truncate text-sm font-semibold text-navy">{{ $choice['name'] }}</h3>
+                                                    <p class="truncate text-xs font-semibold text-primary">{{ $choice['specialization'] ?: 'Specialty not listed' }}</p>
+                                                </div>
+                                                @if (($choice['fee'] ?? '') !== '')
+                                                    <p class="shrink-0 text-sm font-bold text-navy">{{ $choice['fee'] }}</p>
+                                                @endif
+                                            </div>
+                                            @if (($choice['degree'] ?? '') !== '' || ($choice['clinic'] ?? '') !== '')
+                                                <p class="mt-0.5 truncate text-xs text-body">{{ collect([$choice['degree'] ?? '', $choice['clinic'] ?? ''])->filter()->implode(' · ') }}</p>
                                             @endif
                                             @if ((int) ($choice['reviews'] ?? 0) > 0)
-                                                <p class="mt-2 text-sm text-navy">
+                                                <p class="mt-1 text-xs text-navy">
                                                     {{ number_format((float) $choice['rating'], 1) }}
                                                     <span class="text-muted">({{ (int) $choice['reviews'] }} {{ (int) $choice['reviews'] === 1 ? 'rating' : 'ratings' }})</span>
                                                 </p>
                                             @endif
-                                            @if (! empty($choice['matchedOn']))
-                                                <p class="mt-2 text-sm font-medium text-success">Fits {{ implode(', ', $choice['matchedOn']) }}</p>
+                                            @if (! empty($choice['matched']))
+                                                <p class="mt-1 truncate text-xs font-medium text-success">Matches this visit</p>
                                             @endif
-                                            @if (($choice['fee'] ?? '') !== '')
-                                                <p class="mt-3 text-lg font-bold text-navy">{{ $choice['fee'] }}</p>
-                                            @endif
-                                            <div class="mt-auto grid grid-cols-2 gap-2 pt-4">
-                                                <button type="button" class="btn-secondary h-10 px-2 text-sm" @click="showProfile(@js($choice['id']))">View profile</button>
-                                                <button type="button" class="btn-primary h-10 px-2 text-sm" @click="startReferral(@js($choice['id']))">Refer</button>
+                                            <div class="mt-2 grid grid-cols-2 gap-2">
+                                                <button type="button" class="btn-secondary h-8 px-2 text-xs" @click="showProfile(@js($choice['id']))">View profile</button>
+                                                <button type="button" class="btn-primary h-8 px-2 text-xs" @click="startReferral(@js($choice['id']))">Refer</button>
                                             </div>
                                         </div>
                                     </article>
@@ -212,34 +192,64 @@
                         </div>
 
                         <div x-show="view === 'profile'" x-cloak>
-                            <button type="button" class="text-sm font-semibold text-primary" @click="view = 'list'">Back to specialists</button>
-                            <div class="mt-4 flex flex-col items-start gap-5 sm:flex-row">
+                            <button type="button" class="inline-flex items-center gap-1.5 text-sm font-semibold text-primary" @click="view = 'list'">
+                                <x-ui.icon name="arrow" class="h-4 w-4 rotate-180" />
+                                Back to specialists
+                            </button>
+                            <div class="mt-4 flex items-start gap-4 rounded-2xl border border-[#E7EEF6] bg-[#F4F7FB] p-4">
                                 <template x-if="doctor && doctor.photo">
-                                    <img :src="doctor.photo" alt="" class="h-28 w-28 shrink-0 rounded-3xl object-cover ring-4 ring-[#EAF3FF]">
+                                    <img :src="doctor.photo" alt="" class="h-16 w-16 shrink-0 rounded-full object-cover object-top ring-2 ring-white">
                                 </template>
-                                <div x-show="doctor && !doctor.photo" class="flex h-28 w-28 shrink-0 items-center justify-center rounded-3xl bg-[#EAF3FF] text-3xl font-semibold text-primary ring-4 ring-[#F4F7FB]" x-text="doctor ? doctor.initials : ''"></div>
+                                <div x-show="doctor && !doctor.photo" class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white text-lg font-semibold text-primary ring-2 ring-[#EAF3FF]" x-text="doctor ? doctor.initials : ''"></div>
                                 <div class="min-w-0">
-                                    <span class="inline-flex rounded-full bg-[#E7F0FF] px-3 py-1 text-sm font-semibold text-primary" x-text="doctor ? doctor.specialization : ''"></span>
-                                    <h3 class="mt-2 text-2xl font-semibold tracking-tight text-heading" x-text="doctor ? doctor.name : ''"></h3>
+                                    <span class="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-primary" x-text="doctor ? doctor.specialization : ''"></span>
+                                    <h3 class="mt-2 text-xl font-semibold tracking-tight text-heading" x-text="doctor ? doctor.name : ''"></h3>
                                     <p class="mt-1 text-sm text-body" x-text="doctor ? [doctor.degree, doctor.clinic].filter(Boolean).join(' · ') : ''"></p>
-                                    <p class="mt-2 text-sm text-navy" x-show="doctor && doctor.reviews > 0" x-cloak>
-                                        <span class="font-semibold text-[#E99A17]" x-text="doctor ? Number(doctor.rating).toFixed(1) : ''"></span>
-                                        <span class="text-muted" x-text="doctor ? '(' + doctor.reviews + (doctor.reviews === 1 ? ' rating' : ' ratings') + ')' : ''"></span>
-                                        <span class="text-muted" x-show="doctor && doctor.experience" x-text="doctor && doctor.experience ? ' · ' + doctor.experience : ''"></span>
+                                    <p class="mt-1 text-sm text-navy" x-show="doctor && (doctor.reviews > 0 || doctor.experience || doctor.fee)" x-cloak>
+                                        <span x-show="doctor && doctor.reviews > 0">
+                                            <span class="font-semibold text-[#E99A17]" x-text="doctor ? Number(doctor.rating).toFixed(1) : ''"></span>
+                                            <span class="text-muted" x-text="doctor ? '(' + doctor.reviews + (doctor.reviews === 1 ? ' rating' : ' ratings') + ')' : ''"></span>
+                                        </span>
+                                        <span class="text-muted" x-show="doctor && doctor.experience" x-text="doctor && doctor.experience ? (doctor.reviews > 0 ? ' · ' : '') + doctor.experience : ''"></span>
+                                        <span class="font-bold" x-show="doctor && doctor.fee" x-text="doctor && doctor.fee ? (doctor.reviews > 0 || doctor.experience ? ' · ' : '') + doctor.fee : ''"></span>
                                     </p>
-                                    <p class="mt-2 text-lg font-bold text-navy" x-show="doctor && doctor.fee" x-text="doctor ? doctor.fee : ''"></p>
                                 </div>
                             </div>
-                            <p class="mt-5 text-sm leading-7 text-body" x-text="doctor && doctor.bio ? doctor.bio : 'No biography has been added yet.'"></p>
-                            <div class="mt-4" x-show="doctor && doctor.focus && doctor.focus.length" x-cloak>
-                                <p class="text-sm font-semibold text-heading">Sees patients for</p>
-                                <div class="mt-2 flex flex-wrap gap-2">
-                                    <template x-for="item in (doctor ? doctor.focus : [])" :key="item">
-                                        <span class="rounded-full bg-[#F4F7FB] px-3 py-1 text-xs font-semibold text-heading" x-text="item"></span>
-                                    </template>
+                            <div class="mt-4 space-y-4">
+                                <p class="text-sm leading-7 text-body" x-text="doctor && doctor.bio ? doctor.bio : 'No biography has been added yet.'"></p>
+                                <p class="text-sm leading-7 text-body" x-show="doctor && doctor.about && doctor.about !== doctor.bio" x-cloak x-text="doctor ? doctor.about : ''"></p>
+                                <div x-show="doctor && doctor.qualifications && doctor.qualifications.length" x-cloak>
+                                    <p class="text-sm font-semibold text-heading">Qualifications</p>
+                                    <ul class="mt-2 space-y-2">
+                                        <template x-for="(item, index) in (doctor ? doctor.qualifications : [])" :key="'q-' + index">
+                                            <li class="rounded-xl bg-[#F4F7FB] px-3 py-2">
+                                                <p class="text-sm font-semibold text-heading" x-text="item.degree"></p>
+                                                <p class="text-xs text-body" x-show="item.institution || item.period" x-text="[item.institution, item.period].filter(Boolean).join(' · ')"></p>
+                                            </li>
+                                        </template>
+                                    </ul>
                                 </div>
+                                <div x-show="doctor && doctor.experiences && doctor.experiences.length" x-cloak>
+                                    <p class="text-sm font-semibold text-heading">Experience</p>
+                                    <ul class="mt-2 space-y-2">
+                                        <template x-for="(item, index) in (doctor ? doctor.experiences : [])" :key="'e-' + index">
+                                            <li class="rounded-xl bg-[#F4F7FB] px-3 py-2">
+                                                <p class="text-sm font-semibold text-heading" x-text="[item.role, item.place].filter(Boolean).join(' · ')"></p>
+                                                <p class="text-xs text-body" x-show="item.period" x-text="item.period"></p>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                                <div x-show="doctor && doctor.focus && doctor.focus.length" x-cloak>
+                                    <p class="text-sm font-semibold text-heading">Sees patients for</p>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <template x-for="item in (doctor ? doctor.focus : [])" :key="item">
+                                            <span class="rounded-full bg-[#F4F7FB] px-3 py-1 text-xs font-semibold text-heading" x-text="item"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <p class="rounded-xl bg-[#F0FDF4] px-4 py-3 text-sm font-medium text-success" x-show="doctor && doctor.matched" x-cloak x-text="doctor ? 'Fits this visit: ' + doctor.matchedOn.join(', ') : ''"></p>
                             </div>
-                            <p class="mt-4 rounded-xl bg-[#F0FDF4] px-4 py-3 text-sm font-medium text-success" x-show="doctor && doctor.matched" x-cloak x-text="doctor ? 'Fits this visit: ' + doctor.matchedOn.join(', ') : ''"></p>
                             <div class="mt-5 flex justify-end gap-2">
                                 <button type="button" class="btn-secondary" @click="view = 'list'">Back</button>
                                 <button type="button" class="btn-primary" @click="startReferral(doctorId)">Refer this doctor</button>
@@ -255,6 +265,10 @@
                             <div x-show="view === 'note'" x-cloak class="space-y-3">
                         @endunless
                             <div class="flex items-center gap-2">
+                                <template x-if="doctor && doctor.photo">
+                                    <img :src="doctor.photo" alt="" class="h-10 w-10 shrink-0 rounded-full object-cover object-top">
+                                </template>
+                                <div x-show="doctor && !doctor.photo" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF3FF] text-xs font-semibold text-primary" x-text="doctor ? doctor.initials : ''"></div>
                                 <div class="min-w-0 flex-1">
                                     <p class="truncate text-sm font-semibold text-heading" x-text="doctor ? doctor.name : ''"></p>
                                     <p class="truncate text-xs text-body" x-text="doctor ? [doctor.specialization, doctor.clinic].filter(Boolean).join(' · ') : ''"></p>

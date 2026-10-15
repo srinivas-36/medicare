@@ -32,10 +32,12 @@ class StoreReceptionistAppointmentRequest extends FormRequest
         }
 
         $email = strtolower(trim((string) $this->input('email')));
+        $age = trim((string) $this->input('age'));
 
-        if ($email !== '') {
-            $this->merge(['email' => $email]);
-        }
+        $this->merge([
+            'email' => $email === '' ? null : $email,
+            'age' => $age === '' ? null : $age,
+        ]);
     }
 
     /**
@@ -59,7 +61,7 @@ class StoreReceptionistAppointmentRequest extends FormRequest
             'name' => [$creating ? 'required' : 'nullable', 'string', 'max:255'],
             'email' => [$creating ? 'required' : 'nullable', 'string', 'email', 'max:255'],
             'phone' => [$creating ? 'required' : 'nullable', 'string', 'max:30'],
-            'age' => [$creating ? 'required' : 'nullable', 'integer', 'min:0', 'max:120'],
+            'age' => [$creating ? 'required' : 'nullable', 'string', 'regex:/^[0-9]{2}$/'],
             'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
             'password' => [($creating && ! $existingPatient) ? 'required' : 'nullable', 'confirmed', Password::defaults()],
             'date' => [
@@ -82,6 +84,8 @@ class StoreReceptionistAppointmentRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'age.required' => 'Enter the age.',
+            'age.regex' => 'Enter a 2-digit age using numbers only.',
             'slot.required' => 'Choose one of the doctor’s saved time slots.',
             'slot.regex' => 'Choose one of the doctor’s saved time slots.',
             'starting_time.required' => 'Choose one of the doctor’s saved time slots.',

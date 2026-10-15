@@ -13,6 +13,7 @@ use App\Support\AppointmentPresenter;
 use App\Support\ClinicSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -36,17 +37,12 @@ class AppointmentController extends Controller
         $status = $request->string('status')->toString();
         $search = trim($request->string('q')->toString());
         $appointments = [];
+        $calendarRows = [];
 
         if ($doctor) {
             $query = Appointment::query()
                 ->with(['patient', 'doctor.user'])
                 ->where('doctor_id', $doctor->id);
-
-            if ($range === 'upcoming') {
-                $query->upcoming();
-            } elseif ($range === 'today') {
-                $query->whereDate('appointment_date', today());
-            }
 
             if (array_key_exists($status, AppointmentPresenter::STATUS_LABELS)) {
                 $query->where('status', $status);
@@ -62,18 +58,54 @@ class AppointmentController extends Controller
                 });
             }
 
-            $appointments = $query
+            $table = clone $query;
+
+            if ($range === 'upcoming') {
+                $table->upcoming();
+            } elseif ($range === 'today') {
+                $table->whereDate('appointment_date', today());
+            }
+
+            $present = fn (Appointment $appointment) => AppointmentPresenter::receptionist($appointment);
+
+            $appointments = $table
                 ->orderBy('appointment_date')
                 ->orderBy('appointment_time')
                 ->get()
-                ->map(fn (Appointment $appointment) => AppointmentPresenter::receptionist($appointment))
+                ->map($present)
+                ->all();
+
+            $calendarRows = $query
+                ->whereDate('appointment_date', '>=', now()->startOfMonth()->subMonth()->toDateString())
+                ->orderBy('appointment_date')
+                ->orderBy('appointment_time')
+                ->get()
+                ->map($present)
                 ->all();
         } else {
             $status = '';
         }
 
+        $selectedDate = $request->string('date')->toString();
+
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedDate)) {
+            $selectedDate = '';
+        }
+
+        $calendar = $doctor
+            ? $this->appointmentCalendar($calendarRows, $request->string('month')->toString(), $selectedDate)
+            : null;
+
+        if ($selectedDate !== '') {
+            $appointments = array_values(array_filter(
+                $calendarRows,
+                fn (array $row) => ($row['iso'] ?? '') === $selectedDate,
+            ));
+        }
+
         return view('dashboard.receptionist.appointments', [
             'appointments' => $appointments,
+            'calendar' => $calendar,
             'range' => $range,
             'status' => $status,
             'doctorName' => $doctor?->user?->name,
@@ -248,12 +280,25 @@ class AppointmentController extends Controller
         $doctor = $this->clinic($request);
         abort_unless($doctor && (int) $appointment->doctor_id === (int) $doctor->id, 403);
         $appointment->load('patient');
+        $bookedOn = $appointment->appointment_date?->toDateString();
+        $canMove = in_array($appointment->status, ['pending', 'confirmed'], true);
+        $openSlots = $canMove
+            ? collect($this->booking->calendar($doctor, null, null, $appointment->id))
+                ->filter(fn (array $slots, string $date) => $bookedOn === null || $date > $bookedOn)
+                ->all()
+            : [];
+        $bookedLabel = AppointmentPresenter::time($appointment->appointment_time);
+
+        if (filled($appointment->ending_time)) {
+            $bookedLabel .= ' – '.AppointmentPresenter::time($appointment->ending_time);
+        }
 
         return view('dashboard.receptionist.appointments.show', [
             'appointment' => $appointment,
-            'openSlots' => $this->booking->calendar($doctor, null, null, $appointment->id),
-            'minDate' => now()->toDateString(),
-            'maxDate' => AppointmentBooking::bookableUntil()->toDateString(),
+            'openSlots' => $openSlots,
+            'bookedDate' => $bookedOn ?? '',
+            'bookedLabel' => $bookedLabel,
+            'canMove' => $canMove,
         ]);
     }
 
@@ -277,9 +322,82 @@ class AppointmentController extends Controller
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $this->booking->reschedule($appointment, $request->user(), $data['date'], $data['time'], $data['reason'] ?? null);
+        $bookedOn = $appointment->appointment_date?->toDateString();
+        $chosen = Carbon::parse($data['date'])->toDateString();
+
+        if ($bookedOn !== null && $chosen <= $bookedOn) {
+            throw ValidationException::withMessages([
+                'date' => 'Choose a day after the booked date.',
+            ]);
+        }
+
+        $this->booking->reschedule($appointment, $request->user(), $chosen, $data['time'], $data['reason'] ?? null);
 
         return back()->with('status', 'Appointment rescheduled.');
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return array{month: string, label: string, prevMonth: string, nextMonth: string, selected: string, selectedLabel: ?string, weeks: list<list<array<string, mixed>|null>>}
+     */
+    private function appointmentCalendar(array $rows, string $month, string $selected): array
+    {
+        $dates = collect($rows)
+            ->pluck('iso')
+            ->filter(fn ($date) => is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date))
+            ->values();
+
+        if (! preg_match('/^\d{4}-\d{2}$/', $month)) {
+            if ($selected !== '') {
+                $month = substr($selected, 0, 7);
+            } else {
+                $current = now()->format('Y-m');
+                $earliest = $dates->sort()->first();
+                $month = ($dates->contains(fn (string $date) => str_starts_with($date, $current)) || ! is_string($earliest))
+                    ? $current
+                    : substr($earliest, 0, 7);
+            }
+        }
+
+        $cursor = Carbon::createFromFormat('Y-m-d', $month.'-01')->startOfMonth();
+        $byDate = collect($rows)->groupBy('iso');
+        $pad = $cursor->dayOfWeek;
+        $cells = array_fill(0, $pad, null);
+
+        for ($day = 1; $day <= $cursor->daysInMonth; $day++) {
+            $date = $cursor->copy()->day($day)->toDateString();
+            $items = collect($byDate->get($date, []))
+                ->map(fn (array $row) => [
+                    'id' => $row['id'],
+                    'patient' => $row['patient'],
+                    'time' => $row['time'],
+                ])
+                ->values()
+                ->all();
+
+            $cells[] = [
+                'date' => $date,
+                'day' => $day,
+                'count' => count($items),
+                'items' => $items,
+                'today' => $date === now()->toDateString(),
+                'selected' => $date === $selected,
+            ];
+        }
+
+        while (count($cells) % 7 !== 0) {
+            $cells[] = null;
+        }
+
+        return [
+            'month' => $cursor->format('Y-m'),
+            'label' => $cursor->format('F Y'),
+            'prevMonth' => $cursor->copy()->subMonth()->format('Y-m'),
+            'nextMonth' => $cursor->copy()->addMonth()->format('Y-m'),
+            'selected' => $selected,
+            'selectedLabel' => $selected !== '' ? Carbon::parse($selected)->format('l, F j, Y') : null,
+            'weeks' => array_chunk($cells, 7),
+        ];
     }
 
     private function clinic(Request $request): ?Doctor

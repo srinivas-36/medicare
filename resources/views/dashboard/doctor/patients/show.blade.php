@@ -85,7 +85,23 @@
     $visits = collect($visits)->map(function (array $visit) {
         $parts = preg_split('/\r\n|\r|\n/', (string) ($visit['condition'] ?? '')) ?: [];
         $parts = array_values(array_filter(array_map('trim', $parts), fn ($line) => $line !== '' && $line !== 'Not specified'));
-        $complaint = $parts[0] ?? null;
+        $duration = null;
+        $symptoms = [];
+
+        foreach ($parts as $line) {
+            if (preg_match('/^duration:\s*(.+)$/i', $line, $match)) {
+                $duration = trim($match[1]);
+                continue;
+            }
+
+            if (preg_match('/^medicines:\s/i', $line)) {
+                continue;
+            }
+
+            $symptoms[] = $line;
+        }
+
+        $complaint = $symptoms[0] ?? null;
 
         if (is_string($complaint) && ! str_contains($complaint, ':')) {
             $complaint = ucfirst(mb_strtolower($complaint));
@@ -101,8 +117,23 @@
             $lines = array_slice($lines, 0, 2);
         }
 
+        $followOn = trim((string) ($visit['follow_up_on'] ?? ''));
+        $followText = trim((string) ($visit['follow_up_instructions'] ?? ''));
+
+        if ($followOn !== '' || $followText !== '') {
+            $when = $followOn !== '' ? \Illuminate\Support\Carbon::parse($followOn)->format('d M Y') : null;
+            $followLine = 'Follow-up'.($when ? ' '.$when : '');
+
+            if ($followText !== '') {
+                $followLine .= ': '.$followText;
+            }
+
+            $lines[] = $followLine;
+        }
+
         $visit['complaint'] = $complaint;
-        $visit['extras'] = array_slice($parts, 1);
+        $visit['duration'] = $duration;
+        $visit['extras'] = array_slice($symptoms, 1);
         $visit['note_lines'] = $lines;
 
         return $visit;
@@ -187,11 +218,56 @@
     $statusClass = [
         'Confirmed' => 'bg-[#ECFDF3] text-[#15803D]',
         'Pending' => 'bg-[#FFFBEB] text-[#B45309]',
-        'Checked in' => 'bg-[#E8F2FF] text-[#1D4ED8]',
+        'At the clinic' => 'bg-[#ECFDF3] text-[#15803D]',
         'Completed' => 'bg-[#E8F2FF] text-[#1D4ED8]',
         'Cancelled' => 'bg-red-50 text-[#B91C1C]',
         'No-show' => 'bg-red-50 text-[#B91C1C]',
     ];
+
+    $statusMeta = [
+        'Confirmed' => ['class' => 'bg-[#ECFDF3] text-[#15803D]', 'icon' => 'check'],
+        'Pending' => ['class' => 'bg-[#FFFBEB] text-[#B45309]', 'icon' => 'clock'],
+        'At the clinic' => ['class' => 'bg-[#ECFDF3] text-[#15803D]', 'icon' => 'building'],
+        'Completed' => ['class' => 'bg-[#E8F2FF] text-[#1D4ED8]', 'icon' => 'check'],
+        'Cancelled' => ['class' => 'bg-[#FEF2F2] text-[#DC2626]', 'icon' => 'x-circle'],
+        'No-show' => ['class' => 'bg-[#FEF2F2] text-[#DC2626]', 'icon' => 'x-circle'],
+    ];
+
+    $historyRows = collect($visits)->map(function (array $visit) use ($statusMeta) {
+        $icon = match ($visit['visit_type'] ?? '') {
+            'check-up' => 'clipboard',
+            'emergency' => 'alert',
+            default => 'stethoscope',
+        };
+        $meta = $statusMeta[$visit['status']] ?? ['class' => 'bg-[#E8F2FF] text-[#1D4ED8]', 'icon' => 'clipboard'];
+
+        return [
+            'id' => $visit['id'],
+            'url' => route('doctor.appointments.show', $visit['id']),
+            'date' => $visit['date'],
+            'time' => $visit['time'],
+            'on' => $visit['on'] ?? '',
+            'type' => $visit['visit_type'] ?? '',
+            'visit' => $visit['visit'] ?? 'Visit',
+            'symptom' => $visit['complaint'] ?? '',
+            'duration' => $visit['duration'] ?? '',
+            'status' => $visit['status'],
+            'icon' => $icon,
+            'status_icon' => $meta['icon'],
+            'status_class' => $meta['class'],
+            'search' => mb_strtolower(trim(implode(' ', array_filter([
+                $visit['date'] ?? '',
+                $visit['time'] ?? '',
+                $visit['visit'] ?? '',
+                $visit['complaint'] ?? '',
+                $visit['duration'] ?? '',
+                $visit['status'] ?? '',
+                $visit['diagnosis'] ?? '',
+                $visit['plan'] ?? '',
+                $visit['clinical_notes'] ?? '',
+            ])))),
+        ];
+    })->values()->all();
 
     $summaryBadge = function (array $note): array {
         return match ($note['raw']) {
@@ -207,6 +283,8 @@
 
 @section('title', $name)
 
+@section('mainClass', 'no-scrollbar')
+
 @section('content')
     <div
         x-data="patientChart(@js([
@@ -215,6 +293,9 @@
             'reportsOpen' => false,
             'visitId' => (string) ($actionDefaultId ?? ''),
             'visits' => $actionVisits,
+            'allReports' => collect($withReports)->flatMap(function ($visit) {
+                return collect($visit['report_files'] ?? [])->map(fn ($file) => $file + ['date' => $visit['date']]);
+            })->values()->all(),
         ]))"
         @keydown.escape.window="menu = false; reportsOpen = false; if (action) closeAction()"
         @chart-action="visitId = String($event.detail.id); openAction($event.detail.name)"
@@ -273,41 +354,34 @@
                 </div>
             </div>
 
-            <div class="flex flex-col items-stretch gap-2 sm:items-end">
-                <div class="flex items-center gap-2">
-                    @if ($chartUrl)
-                       
-                    @endif
-                    <div class="relative">
-                        <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]" @click="menu = !menu" aria-label="More actions" :aria-expanded="menu">
-                            <x-ui.icon name="dots" class="h-4 w-4" />
-                        </button>
-                        <div x-show="menu" x-cloak @click.outside="menu = false" class="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-[#E7EEF6] bg-white py-1 text-left shadow-lift">
-                            <a href="{{ route('doctor.patients') }}" class="block px-3 py-2 text-sm font-medium text-[#181A1E] no-underline hover:bg-[#F8FAFC]">All patients</a>
-                            @if ($visits !== [])
-                                <a href="{{ route('doctor.appointments.show', $visits[0]['id']) }}" class="block px-3 py-2 text-sm font-medium text-[#181A1E] no-underline hover:bg-[#F8FAFC]">Open latest visit</a>
-                            @endif
-                        </div>
+            <div class="flex shrink-0 flex-nowrap items-center gap-2">
+                @if ($analysisUrl)
+                    <a href="{{ $analysisUrl }}" class="btn-secondary h-10">
+                        <x-ui.icon name="spark" class="h-4 w-4 text-[#0067FF]" />
+                        AI Analysis
+                    </a>
+                @endif
+                @if ($actionVisits !== [])
+                    <button type="button" class="btn-secondary h-10" @click="openAction('note')">
+                        <x-ui.icon name="note" class="h-4 w-4 text-[#0067FF]" />
+                        Add Note
+                    </button>
+                @endif
+                <div class="relative">
+                    <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]" @click="menu = !menu" aria-label="More actions" :aria-expanded="menu">
+                        <x-ui.icon name="dots" class="h-4 w-4" />
+                    </button>
+                    <div x-show="menu" x-cloak @click.outside="menu = false" class="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-[#E7EEF6] bg-white py-1 text-left shadow-lift">
+                        <a href="{{ route('doctor.patients') }}" class="block px-3 py-2 text-sm font-medium text-[#181A1E] no-underline hover:bg-[#F8FAFC]">All patients</a>
+                        @if ($visits !== [])
+                            <a href="{{ route('doctor.appointments.show', $visits[0]['id']) }}" class="block px-3 py-2 text-sm font-medium text-[#181A1E] no-underline hover:bg-[#F8FAFC]">Open latest visit</a>
+                        @endif
                     </div>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    @if ($analysisUrl)
-                        <a href="{{ $analysisUrl }}" class="btn-secondary h-10">
-                            <x-ui.icon name="spark" class="h-4 w-4 text-[#0067FF]" />
-                            AI Analysis
-                        </a>
-                    @endif
-                    @if ($actionVisits !== [])
-                        <button type="button" class="btn-secondary h-10" @click="openAction('note')">
-                            <x-ui.icon name="note" class="h-4 w-4 text-[#0067FF]" />
-                            Add Note
-                        </button>
-                    @endif
                 </div>
             </div>
         </header>
 
-        <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-[#E2E8F0]" aria-label="Chart sections">
+        <nav class="no-scrollbar mb-4 flex gap-1 overflow-x-auto border-b border-[#E2E8F0]" aria-label="Chart sections">
             @foreach ([
                 'overview' => ['Overview', 'grid'],
                 'history' => ['Visit History', 'calendar'],
@@ -482,7 +556,7 @@
                         Quick Actions
                     </h2>
                     <div class="mt-4 flex flex-col gap-2">
-                        <button type="button" class="btn-secondary h-11 w-full" @click="reportsOpen = true">
+                        <button type="button" class="btn-secondary h-11 w-full" @click="openReports(allReports, 'All reports')">
                             <x-ui.icon name="file" class="h-4 w-4 text-[#0067FF]" />
                             View All Reports
                         </button>
@@ -538,8 +612,110 @@
         </div>
 
         <section x-show="tab === 'history'" x-cloak class="dash-panel p-4 sm:p-5">
-            <h2 class="text-[15px] font-semibold text-[#181A1E]">Visit History</h2>
-            @include('dashboard.doctor.patients.partials.visits', ['rows' => $visits, 'statusClass' => $statusClass])
+            <div x-data="visitHistory(@js($historyRows))">
+                <h2 class="text-lg font-semibold text-[#181A1E]">Visit history</h2>
+                <p class="mt-1 text-sm text-[#64748B]">Review previous appointments and clinical notes.</p>
+
+                <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <label class="relative block lg:w-[168px] lg:shrink-0">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">
+                            <x-ui.icon name="calendar" class="h-4 w-4" />
+                        </span>
+                        <select x-model="date" class="field h-11 appearance-none bg-white bg-none pl-10 pr-9 text-sm font-medium text-[#181A1E]">
+                            <option value="all">All dates</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 3 months</option>
+                            <option value="180">Last 6 months</option>
+                            <option value="year">This year</option>
+                        </select>
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
+                            <x-ui.icon name="chevron" class="h-4 w-4" />
+                        </span>
+                    </label>
+
+                    <label class="relative block lg:w-[176px] lg:shrink-0">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">
+                            <x-ui.icon name="file" class="h-4 w-4" />
+                        </span>
+                        <select x-model="type" class="field h-11 appearance-none bg-white bg-none pl-10 pr-9 text-sm font-medium text-[#181A1E]">
+                            <option value="all">All visit types</option>
+                            @foreach (\App\Support\AppointmentPresenter::VISIT_LABELS as $value => $label)
+                                <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
+                            <x-ui.icon name="chevron" class="h-4 w-4" />
+                        </span>
+                    </label>
+
+                    <label class="relative block lg:w-[168px] lg:shrink-0">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">
+                            <x-ui.icon name="filter" class="h-4 w-4" />
+                        </span>
+                        <select x-model="status" class="field h-11 appearance-none bg-white bg-none pl-10 pr-9 text-sm font-medium text-[#181A1E]">
+                            <option value="all">All statuses</option>
+                            @foreach (\App\Support\AppointmentPresenter::STATUS_LABELS as $label)
+                                <option value="{{ $label }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
+                            <x-ui.icon name="chevron" class="h-4 w-4" />
+                        </span>
+                    </label>
+
+                    <label class="relative block min-w-0 flex-1">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
+                            <x-ui.icon name="search" class="h-4 w-4" />
+                        </span>
+                        <input x-model="q" type="search" placeholder="Search visits, symptoms or notes..." class="field h-11 bg-white pl-10 pr-3 text-sm">
+                    </label>
+                </div>
+
+                @if ($historyRows === [])
+                    <p class="mt-6 text-sm text-[#64748B]">No visits with you yet.</p>
+                @else
+                    <div class="relative mt-2">
+                        <div x-show="matched > 1" x-cloak class="pointer-events-none absolute bottom-8 left-[4px] top-8 w-px bg-[#E2E8F0]"></div>
+                        <ul>
+                            @foreach ($historyRows as $index => $row)
+                                <li x-show="visible(rows[{{ $index }}])" class="border-b border-[#F1F5F9] last:border-b-0">
+                                    <a href="{{ $row['url'] }}" class="relative flex items-center gap-3 py-4 pl-7 no-underline transition hover:bg-[#F8FAFC] sm:gap-4">
+                                        <span class="absolute left-0 top-1/2 z-10 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-[#0067FF] ring-4 ring-white" aria-hidden="true"></span>
+                                        <div class="w-[108px] shrink-0">
+                                            <p class="text-sm font-semibold text-[#181A1E]">{{ $row['date'] }}</p>
+                                            <p class="mt-1 inline-flex items-center gap-1.5 text-xs text-[#64748B]">
+                                                <x-ui.icon name="calendar" class="h-3.5 w-3.5" />
+                                                {{ $row['time'] }}
+                                            </p>
+                                        </div>
+                                        <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#E8F2FF] text-[#0067FF]">
+                                            <x-ui.icon :name="$row['icon']" class="h-5 w-5" />
+                                        </span>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-sm font-semibold text-[#181A1E]">{{ $row['visit'] }}</p>
+                                            @if (filled($row['symptom']))
+                                                <p class="mt-0.5 truncate text-sm text-[#64748B]">{{ $row['symptom'] }}</p>
+                                            @endif
+                                            @if (filled($row['duration']))
+                                                <p class="mt-1 inline-flex items-center gap-1.5 text-xs text-[#64748B]">
+                                                    <x-ui.icon name="clock" class="h-3.5 w-3.5" />
+                                                    Duration: {{ $row['duration'] }}
+                                                </p>
+                                            @endif
+                                        </div>
+                                        <span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold {{ $row['status_class'] }}">
+                                            <x-ui.icon :name="$row['status_icon']" class="h-3.5 w-3.5" />
+                                            {{ $row['status'] }}
+                                        </span>
+                                        <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-[#94A3B8]" />
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                        <p x-show="matched === 0" x-cloak class="py-8 text-center text-sm text-[#64748B]">No visits match these filters.</p>
+                    </div>
+                @endif
+            </div>
         </section>
 
         <section x-show="tab === 'consultations'" x-cloak class="dash-panel">
@@ -589,8 +765,29 @@
                 editing: Boolean(config.editing),
                 action: config.action,
                 reportsOpen: Boolean(config.reportsOpen),
+                reportFiles: [],
+                reportHeading: 'Reports',
+                allReports: Array.isArray(config.allReports) ? config.allReports : [],
                 visitId: config.visitId ? String(config.visitId) : '',
                 visits: Array.isArray(config.visits) ? config.visits : [],
+
+                init() {
+                    const allowed = ['overview', 'history', 'consultations', 'reports', 'referrals'];
+                    const query = new URLSearchParams(window.location.search).get('tab');
+                    const hash = window.location.hash.replace('#', '');
+                    const next = allowed.includes(query) ? query : (allowed.includes(hash) ? hash : '');
+
+                    if (next !== '') {
+                        this.tab = next;
+                    }
+                },
+
+                openReports(files, heading) {
+                    this.reportFiles = Array.isArray(files) ? files : [];
+                    this.reportHeading = heading || 'Reports';
+                    this.reportsOpen = true;
+                    this.menu = false;
+                },
 
                 openAction(name) {
                     this.action = name;
@@ -607,6 +804,59 @@
 
                 get visit() {
                     return this.visits.find((item) => String(item.id) === String(this.visitId)) ?? this.visits[0] ?? null;
+                },
+            }));
+
+            Alpine.data('visitHistory', (rows) => ({
+                date: 'all',
+                type: 'all',
+                status: 'all',
+                q: '',
+                rows: Array.isArray(rows) ? rows : [],
+
+                visible(row) {
+                    if (!row) {
+                        return false;
+                    }
+
+                    if (this.type !== 'all' && row.type !== this.type) {
+                        return false;
+                    }
+
+                    if (this.status !== 'all' && row.status !== this.status) {
+                        return false;
+                    }
+
+                    if (this.date !== 'all' && row.on) {
+                        const on = new Date(row.on + 'T00:00:00');
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const days = (today - on) / 86400000;
+
+                        if (this.date === '30' && (days < 0 || days > 30)) {
+                            return false;
+                        }
+
+                        if (this.date === '90' && (days < 0 || days > 90)) {
+                            return false;
+                        }
+
+                        if (this.date === '180' && (days < 0 || days > 180)) {
+                            return false;
+                        }
+
+                        if (this.date === 'year' && on.getFullYear() !== today.getFullYear()) {
+                            return false;
+                        }
+                    }
+
+                    const query = this.q.trim().toLowerCase();
+
+                    return query === '' || String(row.search || '').includes(query);
+                },
+
+                get matched() {
+                    return this.rows.filter((row) => this.visible(row)).length;
                 },
             }));
         });

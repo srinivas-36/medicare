@@ -10,7 +10,7 @@
     $statusClass = [
         'Confirmed' => 'badge-success',
         'Pending' => 'badge-warning',
-        'Checked in' => 'badge-info',
+        'At the clinic' => 'badge-success',
         'Completed' => 'badge-info',
         'Cancelled' => 'badge-danger',
         'No-show' => 'badge-danger',
@@ -20,7 +20,7 @@
         '' => 'All',
         'pending' => 'Pending',
         'confirmed' => 'Confirmed',
-        'checked_in' => 'Checked in',
+        'checked_in' => 'At the clinic',
         'completed' => 'Completed',
     ];
 @endphp
@@ -56,7 +56,7 @@
         <div class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <x-ui.metric label="Today" :value="$counts['today']" tone="blue" :href="route('receptionist.appointments', ['range' => 'today'])" />
             <x-ui.metric label="Awaiting" :value="$counts['awaiting']" tone="amber" />
-            <x-ui.metric label="Checked in" :value="$counts['checked_in']" tone="blue" />
+            <x-ui.metric label="At the clinic" :value="$counts['checked_in']" tone="blue" />
             <x-ui.metric label="Completed" :value="$counts['completed']" tone="green" />
         </div>
 

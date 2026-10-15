@@ -287,7 +287,7 @@ class AppointmentBooking
         string $time,
         ?string $reason = null,
     ): Appointment {
-        if (in_array($appointment->status, ['completed', 'cancelled', 'no_show'], true)) {
+        if (in_array($appointment->status, ['checked_in', 'completed', 'cancelled', 'no_show'], true)) {
             throw ValidationException::withMessages([
                 'date' => 'This appointment can no longer be moved.',
             ]);
@@ -295,6 +295,13 @@ class AppointmentBooking
 
         return DB::transaction(function () use ($appointment, $actor, $date, $time, $reason) {
             $lockedAppointment = Appointment::query()->whereKey($appointment->id)->lockForUpdate()->firstOrFail();
+
+            if (in_array($lockedAppointment->status, ['checked_in', 'completed', 'cancelled', 'no_show'], true)) {
+                throw ValidationException::withMessages([
+                    'date' => 'This appointment can no longer be moved.',
+                ]);
+            }
+
             $doctor = $this->lockDoctor($lockedAppointment->doctor);
             $this->assertOpen($doctor, $date, $time, $lockedAppointment->id);
             $ending = $this->sliceEnd($doctor, $date, $time);

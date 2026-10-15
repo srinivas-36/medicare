@@ -179,34 +179,44 @@
                     <p class="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-danger">{{ $errors->first('date') ?: $errors->first('time') ?: $errors->first('slot') ?: $errors->first('starting_time') }}</p>
                 @endif
 
-                @if ($openSlots === [])
-                    <p class="mt-4 text-sm text-body">No other open times are available in the booking window.</p>
-                @else
-                    <form method="POST" action="{{ route('patient.bookings.reschedule', $appointment) }}" data-reschedule class="mt-5">
-                        @csrf
-                        <input type="hidden" name="slot" data-reschedule-slot value="{{ old('slot') }}">
-                        <div class="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-                            <div>
-                                <p class="text-sm font-semibold text-heading">Available dates</p>
-                                <p data-reschedule-date class="mt-1 text-sm font-semibold text-primary">Choose an open day</p>
-                                <div data-reschedule-calendar class="mt-3"></div>
-                            </div>
-                            <div>
-                                <p class="text-sm font-semibold text-heading">Available time slots</p>
-                                <div data-reschedule-slots class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2"></div>
-                                <p data-reschedule-note class="mt-2 text-sm text-body">Choose an open day to see times.</p>
-                            </div>
+                <form
+                    method="POST"
+                    action="{{ route('patient.bookings.reschedule', $appointment) }}"
+                    data-reschedule
+                    data-booked-date="{{ $appointment->appointment_date?->toDateString() }}"
+                    data-booked-label="{{ $booking['slot'] }}"
+                    class="mt-5"
+                >
+                    @csrf
+                    <input type="hidden" name="slot" data-reschedule-slot value="{{ old('slot') }}">
+                    <div class="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+                        <div>
+                            <p class="text-sm font-semibold text-heading">Available dates</p>
+                            <p data-reschedule-date class="mt-1 text-sm font-semibold text-primary">Current booking</p>
+                            <div data-reschedule-calendar class="mt-3"></div>
+                            <p class="mt-2 flex items-center gap-2 text-xs text-body">
+                                <span class="inline-block h-3 w-3 rounded bg-[#16A34A]" aria-hidden="true"></span>
+                                Current booking
+                            </p>
                         </div>
-                        <button type="submit" class="btn-primary mt-4">Reschedule</button>
-                    </form>
-                    <script type="application/json" id="reschedule-open-slots">@json($openSlots)</script>
-                @endif
+                        <div>
+                            <p class="text-sm font-semibold text-heading">Available time slots</p>
+                            <div data-reschedule-slots class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2"></div>
+                            <p data-reschedule-note class="mt-2 text-sm text-body">Choose a day after your current booking.</p>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary mt-4">Reschedule</button>
+                </form>
+                <script type="application/json" id="reschedule-open-slots">@json($openSlots)</script>
 
-                <form method="POST" action="{{ route('patient.bookings.cancel', $appointment) }}" class="mt-5 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end" data-confirm="This visit will be cancelled and the time will open again." data-confirm-title="Cancel this appointment?" data-confirm-ok="Cancel appointment" data-confirm-tone="danger">
+                <form id="cancel" method="POST" action="{{ route('patient.bookings.cancel', $appointment) }}" class="mt-5 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end" data-confirm="This visit will be cancelled and the time will open again." data-confirm-title="Cancel this appointment?" data-confirm-ok="Cancel appointment" data-confirm-tone="danger">
                     @csrf
                     <label class="block min-w-0 flex-1 text-sm font-semibold text-heading">
-                        Cancellation reason (optional)
-                        <input type="text" name="cancel_reason" maxlength="255" value="{{ old('cancel_reason') }}" class="field mt-2" placeholder="Enter reason for cancellation...">
+                        Cancellation reason
+                        <input type="text" name="cancel_reason" maxlength="255" value="{{ old('cancel_reason') }}" required class="field mt-2" placeholder="Enter reason for cancellation...">
+                        @error('cancel_reason')
+                            <span class="mt-1 block text-sm font-medium text-danger">{{ $message }}</span>
+                        @enderror
                     </label>
                     <button type="submit" class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#F5C2C7] bg-white px-4 text-sm font-semibold text-[#DC3545] hover:bg-[#FFF5F5]">
                         <x-ui.icon name="trash" class="h-4 w-4" />
@@ -303,7 +313,7 @@
     </div>
 </div>
 
-@if ($appointment->canPatientCancel() && $openSlots !== [])
+@if ($appointment->canPatientCancel())
     @push('scripts')
         <script>
             document.addEventListener('DOMContentLoaded', () => {
@@ -323,11 +333,13 @@
                 const slotList = form.querySelector('[data-reschedule-slots]');
                 const note = form.querySelector('[data-reschedule-note]');
                 const pickedDate = form.querySelector('[data-reschedule-date]');
-                const dates = Object.keys(open).sort();
+                const bookedDate = form.dataset.bookedDate || '';
+                const bookedLabel = form.dataset.bookedLabel || 'Current booking';
+                const dates = Object.keys(open).filter((value) => !bookedDate || value > bookedDate).sort();
                 const saved = String(slotInput.value || '').split('|');
-                let selectedDate = dates.includes(saved[0]) ? saved[0] : (dates[0] || '');
+                let selectedDate = dates.includes(saved[0]) ? saved[0] : '';
                 let selectedStart = saved[1] || '';
-                let monthCursor = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+                let monthCursor = new Date(`${(selectedDate || bookedDate || dates[0] || new Date().toISOString().slice(0, 10))}T00:00:00`);
                 monthCursor.setDate(1);
 
                 const formatTime = (time) => {
@@ -364,13 +376,19 @@
                     for (let i = 0; i < startPad; i += 1) cells.push('<span></span>');
                     for (let day = 1; day <= daysInMonth; day += 1) {
                         const value = isoDate(new Date(year, month, day));
-                        const available = Array.isArray(open[value]) && open[value].length > 0;
+                        const isBooked = bookedDate !== '' && value === bookedDate;
+                        const available = !isBooked && dates.includes(value);
                         const selected = available && selectedDate === value;
                         const classes = [
                             'h-8 rounded-md text-xs font-semibold',
-                            selected ? 'bg-[#0067FF] text-white' : (available ? 'bg-[#E8F2FF] text-[#0067FF] hover:ring-1 hover:ring-[#0067FF]' : 'cursor-not-allowed text-[#CBD5E1] line-through'),
+                            isBooked
+                                ? 'bg-[#16A34A] text-white'
+                                : (selected
+                                    ? 'bg-[#0067FF] text-white'
+                                    : (available ? 'bg-[#E8F2FF] text-[#0067FF] hover:ring-1 hover:ring-[#0067FF]' : 'cursor-not-allowed text-[#CBD5E1] line-through')),
                         ].join(' ');
-                        cells.push(`<button type="button" class="${classes}" data-day="${value}" ${available ? '' : 'disabled'}>${day}</button>`);
+                        const title = isBooked ? ' title="Current booking"' : '';
+                        cells.push(`<button type="button" class="${classes}" data-day="${value}" data-booked="${isBooked ? '1' : '0'}" ${available || isBooked ? '' : 'disabled'}${title}>${day}</button>`);
                     }
 
                     calendar.innerHTML = `
@@ -388,16 +406,38 @@
                     `;
                 };
 
-                const paintSlots = () => {
+                const paintCurrentBooking = () => {
                     slotList.innerHTML = '';
-                    pickedDate.textContent = formatDate(selectedDate);
-                    const times = open[selectedDate] || [];
+                    pickedDate.textContent = formatDate(bookedDate);
+                    pickedDate.className = 'mt-1 text-sm font-semibold text-[#15803D]';
+                    slotInput.value = '';
+                    selectedStart = '';
 
-                    if (!selectedDate || times.length === 0) {
-                        note.textContent = 'Choose an open day to see times.';
-                        slotInput.value = '';
+                    if (!bookedDate) {
+                        note.textContent = 'Choose a day after your current booking.';
                         return;
                     }
+
+                    const current = document.createElement('button');
+                    current.type = 'button';
+                    current.disabled = true;
+                    current.textContent = bookedLabel;
+                    current.className = 'rounded-lg border border-[#16A34A] bg-[#16A34A] px-3 py-2 text-left text-sm font-semibold text-white';
+                    slotList.appendChild(current);
+                    note.textContent = 'This is your current booking. Choose a later day to reschedule.';
+                };
+
+                const paintSlots = () => {
+                    slotList.innerHTML = '';
+                    const times = (selectedDate && dates.includes(selectedDate) ? open[selectedDate] : null) || [];
+
+                    if (!selectedDate || times.length === 0) {
+                        paintCurrentBooking();
+                        return;
+                    }
+
+                    pickedDate.textContent = formatDate(selectedDate);
+                    pickedDate.className = 'mt-1 text-sm font-semibold text-primary';
 
                     note.textContent = `${times.length} open ${times.length === 1 ? 'time' : 'times'} on this day.`;
                     let matched = false;
@@ -429,7 +469,15 @@
                         monthCursor.setMonth(monthCursor.getMonth() + Number(monthButton.dataset.month));
                         paintCalendar();
                     }
-                    if (dayButton && !dayButton.disabled && open[dayButton.dataset.day]) {
+                    if (dayButton?.dataset.booked === '1') {
+                        selectedDate = '';
+                        selectedStart = '';
+                        slotInput.value = '';
+                        paintCalendar();
+                        paintCurrentBooking();
+                        return;
+                    }
+                    if (dayButton && !dayButton.disabled && dates.includes(dayButton.dataset.day)) {
                         selectedDate = dayButton.dataset.day;
                         selectedStart = '';
                         slotInput.value = '';
@@ -439,9 +487,9 @@
                 });
 
                 form.addEventListener('submit', (event) => {
-                    if (!slotInput.value) {
+                    if (!slotInput.value || (bookedDate && slotInput.value.slice(0, 10) <= bookedDate)) {
                         event.preventDefault();
-                        note.textContent = 'Choose an open day and a time before rescheduling.';
+                        note.textContent = 'Choose a day after your current booking, then pick a time.';
                     }
                 });
 

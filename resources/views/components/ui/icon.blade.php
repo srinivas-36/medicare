@@ -66,6 +66,10 @@
             <circle cx="12" cy="12" r="9" />
             <path d="m8 12 2.5 2.5L16 9" stroke-linecap="round" stroke-linejoin="round" />
             @break
+        @case('x-circle')
+            <circle cx="12" cy="12" r="9" />
+            <path d="m9 9 6 6M15 9l-6 6" stroke-linecap="round" />
+            @break
         @case('arrow')
             <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
             @break

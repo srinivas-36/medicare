@@ -147,7 +147,7 @@
                 </div>
             </header>
 
-            <main class="min-h-0 flex-1 overflow-y-auto bg-[#F4F7FB]">
+            <main class="min-h-0 flex-1 overflow-y-auto bg-[#F4F7FB] @yield('mainClass')">
                 <div class="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
                     @yield('content')
                 </div>

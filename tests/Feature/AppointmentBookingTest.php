@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Appointment;
 use App\Models\Doctor;
+use App\Models\DoctorReview;
 use App\Models\TimeSlot;
 use App\Models\User;
 use App\Services\StripeCheckout;
@@ -76,8 +77,16 @@ class AppointmentBookingTest extends TestCase
 
         $this->actingAs($patient)
             ->post(route('patient.bookings.cancel', $appointment))
+            ->assertSessionHasErrors('cancel_reason');
+
+        $this->actingAs($patient)
+            ->post(route('patient.bookings.cancel', $appointment), [
+                'cancel_reason' => 'Need a different day',
+            ])
             ->assertRedirect()
             ->assertSessionHas('status', 'Appointment cancelled.');
+
+        $this->assertSame('Need a different day', $appointment->fresh()->cancel_reason);
 
         $this->assertSame('cancelled', $appointment->fresh()->status);
 
@@ -483,6 +492,42 @@ class AppointmentBookingTest extends TestCase
             ->get(route('receptionist.dashboard'))
             ->assertOk()
             ->assertDontSee('John Smith');
+    }
+
+    public function test_booking_header_uses_submitted_reviews_instead_of_the_catalog_rating(): void
+    {
+        [, $doctor] = $this->makeDoctor();
+        $doctor->forceFill([
+            'average_rating' => 5,
+            'total_rating' => 1,
+        ])->save();
+
+        $this->get(route('doctors.book', $doctor))
+            ->assertOk()
+            ->assertSee('>0.0<', false)
+            ->assertDontSee('>5.0<', false);
+
+        $patient = $this->makePatient();
+        DoctorReview::query()->create([
+            'doctor_id' => $doctor->id,
+            'user_id' => $patient->id,
+            'rating' => 4,
+            'body' => 'Clear and kind.',
+        ]);
+
+        $this->get(route('doctors.book', $doctor))
+            ->assertOk()
+            ->assertSee('>4.0<', false)
+            ->assertSee('>1</span>', false)
+            ->assertDontSee('>5.0<', false);
+
+        $this->getJson(route('doctors.reviews.index', $doctor))
+            ->assertOk()
+            ->assertJsonPath('average', '4.0')
+            ->assertJsonPath('total', 1);
+
+        $this->assertEquals(5.0, (float) $doctor->fresh()->average_rating);
+        $this->assertSame(1, $doctor->fresh()->total_rating);
     }
 
     /**

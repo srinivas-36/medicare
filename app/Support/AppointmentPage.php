@@ -69,7 +69,7 @@ class AppointmentPage
 
         $tab = $request->string('tab')->toString();
 
-        if (! in_array($tab, ['upcoming', 'completed', 'cancelled'], true)) {
+        if (! in_array($tab, ['upcoming', 'confirmed', 'checked_in', 'completed', 'cancelled'], true)) {
             $tab = '';
         }
 
@@ -93,7 +93,7 @@ class AppointmentPage
     {
         $query = [];
 
-        if (in_array($tab, ['upcoming', 'completed', 'cancelled'], true)) {
+        if (in_array($tab, ['upcoming', 'confirmed', 'checked_in', 'completed', 'cancelled'], true)) {
             $query['tab'] = $tab;
         }
 
@@ -188,6 +188,10 @@ class AppointmentPage
 
         if ($filters['tab'] === 'upcoming') {
             $query->upcoming()->whereNotIn('status', ['cancelled', 'completed', 'no_show']);
+        } elseif ($filters['tab'] === 'confirmed') {
+            $query->where('status', 'confirmed');
+        } elseif ($filters['tab'] === 'checked_in') {
+            $query->where('status', 'checked_in');
         } elseif ($filters['tab'] === 'completed') {
             $query->where('status', 'completed');
         } elseif ($filters['tab'] === 'cancelled') {
@@ -297,13 +301,13 @@ class AppointmentPage
             'pending' => 'bg-[#E8F2FF] text-[#1D4ED8]',
             'approved' => 'bg-[#DCFCE7] text-[#15803D]',
             'confirmed' => 'bg-[#DCFCE7] text-[#15803D]',
-            'checked_in' => 'bg-[#E8F2FF] text-[#1D4ED8]',
+            'checked_in' => 'bg-[#ECFDF3] text-[#15803D]',
             'completed' => 'bg-[#F1F5F9] text-[#475569]',
             'cancelled' => 'bg-[#FEE2E2] text-[#B91C1C]',
             'no_show' => 'bg-[#FEE2E2] text-[#B91C1C]',
         ];
         $labels = [
-            'checked_in' => 'Checked in',
+            'checked_in' => 'At the clinic',
             'no_show' => 'No-show',
         ];
 

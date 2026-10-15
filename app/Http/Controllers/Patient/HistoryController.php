@@ -21,21 +21,47 @@ class HistoryController extends Controller
 
         $doctorId = $request->integer('doctor');
         $visit = $request->string('visit')->toString();
-        $scope = $request->string('scope')->toString();
+        $status = $request->string('status')->toString();
+
+        if ($status === '' && $request->filled('scope')) {
+            $status = match ($request->string('scope')->toString()) {
+                'consultations' => 'completed',
+                'cancelled' => 'cancelled',
+                'upcoming' => 'upcoming',
+                default => '',
+            };
+        }
 
         if ($doctorId > 0) {
             $query->where('doctor_id', $doctorId);
         }
 
-        if (in_array($visit, ['check-up', 'consultation', 'follow-up', 'emergency'], true)) {
+        if ($visit === 'follow-up') {
+            $query->where(function ($query) {
+                $query->where('visit_type', 'follow-up')
+                    ->orWhereHas('consultation', function ($consultation) {
+                        $consultation->where(function ($consultation) {
+                            $consultation->whereNotNull('follow_up_on')
+                                ->orWhereNotNull('follow_up_instructions');
+                        });
+                    })
+                    ->orWhereExists(function ($scheduled) {
+                        $scheduled->selectRaw('1')
+                            ->from('consultations as scheduled_follow_ups')
+                            ->whereColumn('scheduled_follow_ups.patient_id', 'appointments.patient_id')
+                            ->whereColumn('scheduled_follow_ups.doctor_id', 'appointments.doctor_id')
+                            ->whereColumn('scheduled_follow_ups.appointment_id', '!=', 'appointments.id')
+                            ->whereNotNull('scheduled_follow_ups.follow_up_on')
+                            ->whereRaw('date(scheduled_follow_ups.follow_up_on) = date(appointments.appointment_date)');
+                    });
+            });
+        } elseif (in_array($visit, ['check-up', 'consultation', 'emergency'], true)) {
             $query->where('visit_type', $visit);
         }
 
-        if ($scope === 'consultations') {
-            $query->where('status', 'completed')->whereHas('consultation');
-        } elseif ($scope === 'cancelled') {
-            $query->where('status', 'cancelled');
-        } elseif ($scope === 'upcoming') {
+        if (in_array($status, ['pending', 'confirmed', 'checked_in', 'completed', 'cancelled', 'no_show'], true)) {
+            $query->where('status', $status);
+        } elseif ($status === 'upcoming') {
             $query->upcoming()->whereNotIn('status', ['cancelled', 'completed', 'no_show']);
         }
 
@@ -61,7 +87,7 @@ class HistoryController extends Controller
             'filters' => [
                 'doctor' => $doctorId,
                 'visit' => $visit,
-                'scope' => $scope,
+                'status' => $status,
                 'from' => $request->string('from')->toString(),
                 'to' => $request->string('to')->toString(),
             ],

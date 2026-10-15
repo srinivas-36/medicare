@@ -39,12 +39,26 @@ class MedicalFile
 
     public static function response(string $path, ?string $name = null): StreamedResponse
     {
-        if (Storage::disk(self::DISK)->exists($path)) {
-            return Storage::disk(self::DISK)->response($path, $name);
+        return self::stream($path, $name, false);
+    }
+
+    public static function download(string $path, ?string $name = null): StreamedResponse
+    {
+        return self::stream($path, $name, true);
+    }
+
+    private static function stream(string $path, ?string $name, bool $download): StreamedResponse
+    {
+        foreach ([self::DISK, 'public'] as $disk) {
+            if (! Storage::disk($disk)->exists($path)) {
+                continue;
+            }
+
+            return $download
+                ? Storage::disk($disk)->download($path, $name)
+                : Storage::disk($disk)->response($path, $name);
         }
 
-        abort_unless(Storage::disk('public')->exists($path), 404);
-
-        return Storage::disk('public')->response($path, $name);
+        abort(404);
     }
 }

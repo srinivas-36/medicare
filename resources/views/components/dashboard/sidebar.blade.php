@@ -127,7 +127,7 @@
         </nav>
 
     <div class="shrink-0 border-t border-[#E7EEF6] p-3">
-        @if ($role === 'patient')
+        <!-- @if ($role === 'patient')
             <div class="sidebar-support rounded-2xl border border-[#E3EDF8] bg-[#F4F8FF] p-4">
                 <a href="{{ route('contact') }}" title="Contact support" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#0067FF] shadow-[0_1px_2px_rgba(15,23,42,0.06)] no-underline">
                     <x-ui.icon name="headset" class="h-5 w-5" />
@@ -147,7 +147,7 @@
                 </span>
                 <x-ui.icon name="chevron-right" class="sidebar-help-chevron h-4 w-4 shrink-0 text-[#94A3B8]" />
             </a>
-        @endif
+        @endif -->
         <form method="POST" action="{{ route('logout') }}" class="mt-2">
             @csrf
             <button type="submit" title="{{ $role === 'patient' ? 'Logout' : 'Log out' }}" @class([

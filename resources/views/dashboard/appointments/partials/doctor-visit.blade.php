@@ -138,10 +138,13 @@ $patientDetails = [
     ['gender', 'Gender', filled($person['gender']) ? $person['gender'] : 'Not provided'],
     ['phone', 'Phone', filled($person['phone']) ? $person['phone'] : 'Not provided'],
     ['mail', 'Email', filled($person['email']) ? $person['email'] : 'Not provided'],
-    ['droplet', 'Blood group', filled($person['blood_type']) ? $person['blood_type'] : 'Not provided'],
-    ['leaf', 'Diabetic', $diabeticLabel],
-    ['thyroid', 'Hyperthyroidism', $thyroidLabel],
 ];
+$healthNotes = is_array($appointment->patient?->patient_profile?->health_notes)
+    ? $appointment->patient->patient_profile->health_notes
+    : [];
+$diabeticRaw = (string) data_get($healthNotes, 'diabetic.value', '');
+$thyroidRaw = (string) data_get($healthNotes, 'hyperthyroidism.value', '');
+$bloodRaw = (string) ($person['blood_type'] ?? '');
 if (filled($person['origin'] ?? null)) {
     $patientDetails[] = ['clipboard', 'Source', $person['origin']];
 }
@@ -295,6 +298,7 @@ if ($bytes < 1024) {
             menu: false,
             cancelOpen: @js($errors->has('cancel_reason')),
             editing: @js($errors->hasAny(['clinical_notes', 'diagnosis', 'plan', 'follow_up_on', 'follow_up_instructions'])),
+            profileEdit: @js($errors->hasAny(['blood_type', 'diabetic', 'hyperthyroidism'])),
             analyzing: false,
             init() {
                 const hash = window.location.hash;
@@ -358,6 +362,12 @@ if ($bytes < 1024) {
                     </form>
                     @endif
                     <a href="{{ route('doctor.patients.show', $appointment->patient_id) }}" class="btn-secondary h-10">Open Patient Chart</a>
+                    @if ($appointment->canRefer())
+                    <button type="button" class="btn-primary h-10" @click="$dispatch('open-referral')">
+                        <x-ui.icon name="users" class="h-4 w-4" />
+                        Refer to doctor
+                    </button>
+                    @endif
                     @if ($canCheckIn)
                     <form method="POST" action="{{ route('doctor.appointments.update-status', $appointment) }}">
                         @csrf
@@ -380,6 +390,7 @@ if ($bytes < 1024) {
                         <x-ui.icon name="pill" class="h-4 w-4" />
                         Start Consultation
                     </button>
+                    @unless ($appointment->status === 'cancelled')
                     <div class="relative">
                         <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]" @click="menu = !menu" aria-label="More actions" :aria-expanded="menu">
                             <x-ui.icon name="dots" class="h-4 w-4" />
@@ -403,16 +414,23 @@ if ($bytes < 1024) {
                             <!-- <a href="#messages" class="block rounded-lg px-3 py-2 text-sm font-medium text-[#181A1E] no-underline hover:bg-[#F8FAFC]" @click="menu = false">Messages</a> -->
                         </div>
                     </div>
+                    @endunless
                     </div>
                 </div>
             </div>
         </header>
 
-        <div class="grid gap-4 xl:grid-cols-2">
+        <div class="grid items-stretch gap-4 xl:grid-cols-2">
                 <section class="min-w-0 self-start rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card xl:col-start-1 xl:row-start-1">
-                    <div class="flex items-center gap-3">
-                        <x-ui.avatar :name="$person['name'] ?: 'Patient'" :photo="$person['photo']" size="md" tone="violet" />
-                        <h2 class="text-sm font-semibold text-[#181A1E]">Patient Information</h2>
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <x-ui.avatar :name="$person['name'] ?: 'Patient'" :photo="$person['photo']" size="md" tone="violet" />
+                            <h2 class="text-sm font-semibold text-[#181A1E]">Patient Information</h2>
+                        </div>
+                        <button type="button" x-show="!profileEdit" class="inline-flex items-center gap-1 text-sm font-semibold text-[#0067FF]" @click="profileEdit = true">
+                            <x-ui.icon name="pencil" class="h-3.5 w-3.5" />
+                            Edit
+                        </button>
                     </div>
                     <dl class="mt-4 grid gap-x-4 gap-y-3 sm:grid-cols-2">
                         @foreach ($patientDetails as [$icon, $label, $value])
@@ -433,9 +451,52 @@ if ($bytes < 1024) {
                         </div>
                         @endforeach
                     </dl>
+                    <form method="POST" action="{{ route('doctor.patients.update', $appointment->patient_id) }}" class="mt-4 border-t border-[#F1F5F9] pt-4">
+                        @csrf
+                        @method('PUT')
+                        <input type="hidden" name="redirect" value="visit">
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-[#64748B]">Clinical details</p>
+                            <p x-show="!profileEdit" class="text-xs text-[#94A3B8]">Blood group, diabetes, and thyroid only</p>
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <label class="block text-xs font-medium text-[#64748B]">
+                                Blood group
+                                <span x-show="!profileEdit" class="mt-1 block text-sm font-semibold text-[#181A1E]">{{ $bloodRaw !== '' ? $bloodRaw : 'Not provided' }}</span>
+                                <select x-show="profileEdit" x-cloak name="blood_type" class="field mt-1 h-10" :disabled="!profileEdit">
+                                    <option value="">Not provided</option>
+                                    @foreach (['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as $type)
+                                        <option value="{{ $type }}" @selected(old('blood_type', $bloodRaw) === $type)>{{ $type }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="block text-xs font-medium text-[#64748B]">
+                                Diabetic
+                                <span x-show="!profileEdit" class="mt-1 block text-sm font-semibold text-[#181A1E]">{{ $diabeticLabel }}</span>
+                                <select x-show="profileEdit" x-cloak name="diabetic" class="field mt-1 h-10" :disabled="!profileEdit">
+                                    <option value="">Not known</option>
+                                    <option value="yes" @selected(old('diabetic', $diabeticRaw) === 'yes')>Yes</option>
+                                    <option value="no" @selected(old('diabetic', $diabeticRaw) === 'no')>No</option>
+                                </select>
+                            </label>
+                            <label class="block text-xs font-medium text-[#64748B]">
+                                Hyperthyroidism
+                                <span x-show="!profileEdit" class="mt-1 block text-sm font-semibold text-[#181A1E]">{{ $thyroidLabel }}</span>
+                                <select x-show="profileEdit" x-cloak name="hyperthyroidism" class="field mt-1 h-10" :disabled="!profileEdit">
+                                    <option value="">Not known</option>
+                                    <option value="yes" @selected(old('hyperthyroidism', $thyroidRaw) === 'yes')>Yes</option>
+                                    <option value="no" @selected(old('hyperthyroidism', $thyroidRaw) === 'no')>No</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div x-show="profileEdit" x-cloak class="mt-3 flex justify-end gap-2">
+                            <button type="button" class="btn-secondary h-9" @click="profileEdit = false">Cancel</button>
+                            <button type="submit" class="btn-primary h-9">Save details</button>
+                        </div>
+                    </form>
                 </section>
 
-                <section class="min-w-0 self-start rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card xl:col-start-1 xl:row-start-2">
+                <section class="h-full min-w-0 self-stretch rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-card xl:col-start-1 xl:row-start-2">
                     <div class="flex items-center justify-between gap-3">
                         <h2 class="text-sm font-semibold text-[#181A1E]">Visit Information</h2>
                         <!-- <button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[#0067FF]" @click="editing = true; tab = 'notes'; document.getElementById('consultation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
@@ -584,7 +645,7 @@ if ($bytes < 1024) {
                     </p>
                 </section>
 
-                <section id="consultation" class="flex min-h-0 flex-1 scroll-mt-4 flex-col rounded-xl border border-[#E2E8F0] bg-white shadow-card">
+                <section id="consultation" class="flex h-full min-h-0 scroll-mt-4 flex-col self-stretch rounded-xl border border-[#E2E8F0] bg-white shadow-card xl:col-start-2 xl:row-start-2">
                     <div class="no-scrollbar flex overflow-x-auto border-b border-[#E2E8F0]" role="tablist" aria-label="Consultation">
                         @foreach ([
                         'symptoms' => 'Symptoms & Examination',
@@ -688,7 +749,7 @@ if ($bytes < 1024) {
                             <label class="block text-sm font-semibold text-[#181A1E]">
                                 Diagnosis
                                 @if ($canSaveConsult)
-                                <input type="text" name="diagnosis" value="{{ old('diagnosis', $consultation?->diagnosis) }}" placeholder="Record the diagnosis" class="field mt-2">
+                                <input type="text" name="diagnosis" value="{{ old('diagnosis', $consultation?->diagnosis) }}" placeholder="Record the diagnosis" class="field mt-2" :disabled="tab !== 'diagnosis'">
                                 @else
                                 <p class="mt-3 whitespace-pre-line font-normal leading-6 text-[#181A1E]">{{ filled($consultation?->diagnosis) ? $consultation->diagnosis : 'Not recorded yet.' }}</p>
                                 @endif
@@ -699,7 +760,7 @@ if ($bytes < 1024) {
                             <label class="block text-sm font-semibold text-[#181A1E]">
                                 Medicines and plan
                                 @if ($canSaveConsult)
-                                <textarea name="plan" rows="5" placeholder="Write the prescription and treatment plan" class="field mt-2">{{ old('plan', $consultation?->plan) }}</textarea>
+                                <textarea name="plan" rows="5" placeholder="Write the prescription and treatment plan" class="field mt-2" :disabled="tab !== 'treatment'">{{ old('plan', $consultation?->plan) }}</textarea>
                                 @else
                                 <p class="mt-3 whitespace-pre-line font-normal leading-6 text-[#181A1E]">{{ filled($consultation?->plan) ? $consultation->plan : 'Not recorded yet.' }}</p>
                                 @endif
@@ -711,11 +772,11 @@ if ($bytes < 1024) {
                             <div class="space-y-4">
                                 <label class="block text-sm font-semibold text-[#181A1E]">
                                     Follow-up instructions
-                                    <textarea name="follow_up_instructions" rows="4" placeholder="What the patient should do next" class="field mt-2">{{ old('follow_up_instructions', $consultation?->follow_up_instructions) }}</textarea>
+                                    <textarea name="follow_up_instructions" rows="4" placeholder="What the patient should do next" class="field mt-2" :disabled="tab !== 'follow'">{{ old('follow_up_instructions', $consultation?->follow_up_instructions) }}</textarea>
                                 </label>
                                 <label class="block text-sm font-semibold text-[#181A1E]">
                                     Next review date
-                                    <input type="date" name="follow_up_on" value="{{ old('follow_up_on', $consultation?->follow_up_on?->toDateString()) }}" class="field mt-2">
+                                    <input type="date" name="follow_up_on" value="{{ old('follow_up_on', $consultation?->follow_up_on?->toDateString()) }}" class="field mt-2" :disabled="tab !== 'follow'">
                                 </label>
                             </div>
                             @else
@@ -734,7 +795,7 @@ if ($bytes < 1024) {
                                 <p class="mt-3 text-sm font-normal leading-6 text-[#64748B]">No notes from the doctor yet.</p>
                                 @endif
                                 @if ($canSaveConsult)
-                                <textarea name="clinical_notes" rows="5" placeholder="Notes from this consultation" class="field mt-2">{{ old('clinical_notes', $consultation?->clinical_notes) }}</textarea>
+                                <textarea name="clinical_notes" rows="5" placeholder="Notes from this consultation" class="field mt-2" :disabled="tab !== 'notes'">{{ old('clinical_notes', $consultation?->clinical_notes) }}</textarea>
                                 @elseif (count($notes) > 0)
                                 <div class="mt-3 space-y-4 font-normal">
                                     @foreach ($notes as $note)
@@ -753,8 +814,13 @@ if ($bytes < 1024) {
                         @unless ($canSaveConsult)
                         <p class="mt-4 text-sm text-[#64748B]">Confirm the visit before saving consultation notes.</p>
                         @else
-                        <div class="mt-auto flex justify-end pt-4">
-                            <button type="submit" class="btn-primary">Save consultation</button>
+                        <div class="mt-auto flex justify-end pt-4" x-show="tab !== 'symptoms'" x-cloak>
+                            <button type="submit" class="btn-primary">
+                                <span x-show="tab === 'diagnosis'">Save diagnosis</span>
+                                <span x-show="tab === 'treatment'" x-cloak>Save treatment plan</span>
+                                <span x-show="tab === 'follow'" x-cloak>Save follow-up</span>
+                                <span x-show="tab === 'notes'" x-cloak>Save notes</span>
+                            </button>
                         </div>
                         @endunless
                     </form>
@@ -789,10 +855,14 @@ if ($bytes < 1024) {
                             <span class="block truncate text-sm font-medium text-[#181A1E]">{{ $file->original_name }}</span>
                             <span class="block text-xs text-[#64748B]">{{ $meta }}</span>
                         </span>
-                        <span class="hidden text-xs text-[#64748B] sm:block">{{ $uploaded }}</span>
-                        <a href="{{ route('doctor.appointments.reports.show', [$appointment, $file]) }}" target="_blank" rel="noopener" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#0067FF] hover:bg-[#F4F7FB]" aria-label="Download {{ $file->original_name }}">
-                            <x-ui.icon name="download" class="h-4 w-4" />
-                        </a>
+                        <span class="hidden text-xs text-[#64748B] lg:block">{{ $uploaded }}</span>
+                        <span class="flex shrink-0 items-center gap-1.5">
+                            <a href="{{ route('doctor.appointments.reports.show', [$appointment, $file]) }}" target="_blank" rel="noopener" class="inline-flex h-8 items-center rounded-lg border border-[#D6E4FF] bg-[#F4F8FF] px-2.5 text-xs font-semibold text-[#0067FF] no-underline hover:bg-[#E8F2FF]">View</a>
+                            <a href="{{ route('doctor.appointments.reports.show', [$appointment, $file, 'download' => 1]) }}" class="inline-flex h-8 items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 text-xs font-semibold text-[#181A1E] no-underline hover:bg-[#F8FAFC]">
+                                <x-ui.icon name="download" class="h-3.5 w-3.5" />
+                                Download
+                            </a>
+                        </span>
                     </li>
                     @endforeach
                 </ul>
@@ -808,7 +878,7 @@ if ($bytes < 1024) {
                         <x-ui.icon name="calendar" class="h-4 w-4 text-[#0067FF]" />
                         Recent Visit History
                     </h2>
-                    <a href="{{ route('doctor.patients.show', $appointment->patient_id) }}" class="text-sm font-semibold text-[#0067FF] no-underline hover:underline">View All</a>
+                    <a href="{{ route('doctor.patients.show', ['patient' => $appointment->patient_id, 'tab' => 'history']) }}" class="text-sm font-semibold text-[#0067FF] no-underline hover:underline">View All</a>
                 </div>
                 @if ($history->isEmpty())
                 <p class="mt-4 text-sm text-[#64748B]">No other visits with you yet.</p>
@@ -840,10 +910,12 @@ if ($bytes < 1024) {
                         <x-ui.icon name="pill" class="h-5 w-5 text-[#0067FF]" />
                         Prescribe Medicine
                     </button>
-                    <a href="#refer" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] no-underline hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]">
+                    @if ($appointment->canRefer())
+                    <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="$dispatch('open-referral')">
                         <x-ui.icon name="users" class="h-5 w-5 text-[#0067FF]" />
-                        Send Referral
-                    </a>
+                        Refer to doctor
+                    </button>
+                    @endif
                     <button type="button" class="flex flex-col items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-4 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]/40 hover:bg-[#F7FAFF]" @click="tab = 'follow'; editing = true; document.getElementById('consultation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })">
                         <x-ui.icon name="calendar" class="h-5 w-5 text-[#0067FF]" />
                         Schedule Follow-up

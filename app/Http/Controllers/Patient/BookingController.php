@@ -16,6 +16,7 @@ use App\Support\MedicalFile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -79,12 +80,19 @@ class BookingController extends Controller
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
+        $bookedOn = $appointment->appointment_date?->toDateString();
+        $openSlots = [];
+
+        if ($appointment->canPatientCancel()) {
+            $openSlots = collect($this->booking->calendar($appointment->doctor, null, null, $appointment->id))
+                ->filter(fn (array $slots, string $date) => $bookedOn === null || $date > $bookedOn)
+                ->all();
+        }
+
         return view('dashboard.appointments.show', [
             'role' => 'patient',
             'appointment' => $appointment,
-            'openSlots' => $appointment->canPatientCancel()
-                ? $this->booking->calendar($appointment->doctor, null, null, $appointment->id)
-                : [],
+            'openSlots' => $openSlots,
             'backUrl' => route('patient.bookings', AppointmentPage::listQuery($request)),
             'backLabel' => 'Back to bookings',
         ]);
@@ -202,7 +210,16 @@ class BookingController extends Controller
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $this->booking->reschedule($appointment, $request->user(), $data['date'], $data['time'], $data['reason'] ?? null);
+        $bookedOn = $appointment->appointment_date?->toDateString();
+        $chosen = Carbon::parse($data['date'])->toDateString();
+
+        if ($bookedOn !== null && $chosen <= $bookedOn) {
+            throw ValidationException::withMessages([
+                'date' => 'Choose a day after your current booking.',
+            ]);
+        }
+
+        $this->booking->reschedule($appointment, $request->user(), $chosen, $data['time'], $data['reason'] ?? null);
 
         return back()->with('status', 'Appointment rescheduled.');
     }

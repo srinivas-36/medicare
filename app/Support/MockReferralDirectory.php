@@ -5,7 +5,7 @@ namespace App\Support;
 use Illuminate\Support\Str;
 
 /**
- * Sample specialists used when no other approved doctor can receive a referral.
+ * Sample specialists offered when a doctor sends a referral.
  */
 class MockReferralDirectory
 {
@@ -29,27 +29,15 @@ class MockReferralDirectory
             ],
             [
                 'name' => 'Dr Vikram Rao',
-                'specialization' => 'Cardiology',
-                'degree' => 'MBBS, DNB Cardiology',
-                'clinic' => 'Lakeside Cardiac Centre',
+                'specialization' => 'Psychiatry',
+                'degree' => 'MBBS, MD Psychiatry',
+                'clinic' => 'Lakeside Mind Clinic',
                 'experience' => '11 years in practice',
-                'bio' => 'Sees referred patients with suspected angina, palpitations, and post-clinic blood pressure concerns. Prefers a clear clinical question with the referral.',
+                'bio' => 'Sees referrals for anxiety, low mood, panic, and sleep problems. A short history of how long the symptoms have lasted is enough to begin.',
                 'rating' => 4.7,
                 'reviews' => 84,
                 'fee' => '₹850',
-                'focus' => ['Angina', 'Palpitations', 'High blood pressure', 'Shortness of breath'],
-            ],
-            [
-                'name' => 'Dr Aisha Banerjee',
-                'specialization' => 'Cardiology',
-                'degree' => 'MBBS, DM Cardiology',
-                'clinic' => 'Harbour Heart Institute',
-                'experience' => '9 years in practice',
-                'bio' => 'Accepts clinic referrals for chest pain, palpitations, and blood pressure that has not settled. A short history and current medicines are enough to begin.',
-                'rating' => 4.8,
-                'reviews' => 64,
-                'fee' => '₹800',
-                'focus' => ['Chest pain', 'Palpitations', 'Hypertension'],
+                'focus' => ['Anxiety', 'Depression', 'Panic', 'Insomnia'],
             ],
             [
                 'name' => 'Dr Rohan Mehta',
@@ -65,27 +53,15 @@ class MockReferralDirectory
             ],
             [
                 'name' => 'Dr Leela Menon',
-                'specialization' => 'Neurology',
-                'degree' => 'MBBS, DM Neurology',
-                'clinic' => 'Northside Neuro Clinic',
+                'specialization' => 'Ophthalmology',
+                'degree' => 'MBBS, MS Ophthalmology',
+                'clinic' => 'Northside Eye Clinic',
                 'experience' => '12 years in practice',
-                'bio' => 'Sees headache, migraine, and dizziness referrals from clinic. Note how long the symptom has lasted and whether it is new or recurring.',
+                'bio' => 'Sees referrals for blurred vision, eye pain, and red eye. Note which eye is affected and whether the change was sudden.',
                 'rating' => 4.8,
                 'reviews' => 141,
                 'fee' => '₹950',
-                'focus' => ['Headache', 'Migraine', 'Dizziness', 'Memory change'],
-            ],
-            [
-                'name' => 'Dr Sameer Qureshi',
-                'specialization' => 'Neurology',
-                'degree' => 'MBBS, DNB Neurology',
-                'clinic' => 'Clear Mind Neurology',
-                'experience' => '10 years in practice',
-                'bio' => 'Takes referrals for headache, numbness, and seizure concerns. Prefers the onset, any triggers, and the examination already recorded.',
-                'rating' => 4.7,
-                'reviews' => 98,
-                'fee' => '₹900',
-                'focus' => ['Headache', 'Numbness', 'Seizure', 'Tingling'],
+                'focus' => ['Blurred vision', 'Eye pain', 'Red eye'],
             ],
             [
                 'name' => 'Dr Priya Nair',
@@ -162,6 +138,8 @@ class MockReferralDirectory
         ];
 
         return array_map(function (array $doctor): array {
+            $slug = Str::after(Str::slug($doctor['name']), 'dr-');
+
             return [
                 'id' => 'preview-'.Str::slug($doctor['name']),
                 'preview' => true,
@@ -172,12 +150,61 @@ class MockReferralDirectory
                 'clinic' => $doctor['clinic'],
                 'experience' => $doctor['experience'],
                 'bio' => $doctor['bio'],
+                'about' => $doctor['about'] ?? $doctor['bio'],
                 'rating' => $doctor['rating'],
                 'reviews' => $doctor['reviews'],
                 'fee' => $doctor['fee'],
-                'photo' => null,
+                'photo' => AppointmentPage::photoUrl('images/referral-doctors/'.$slug.'.jpg'),
                 'focus' => $doctor['focus'],
+                'qualifications' => self::qualifications($doctor),
+                'experiences' => self::experiences($doctor),
             ];
         }, $doctors);
+    }
+
+    /**
+     * @param  array<string, mixed>  $doctor
+     * @return list<array{degree: string, institution: string, period: string}>
+     */
+    private static function qualifications(array $doctor): array
+    {
+        if (isset($doctor['qualifications']) && is_array($doctor['qualifications'])) {
+            return array_values($doctor['qualifications']);
+        }
+
+        return array_values(array_filter(array_map(function (string $degree): ?array {
+            $degree = trim($degree);
+
+            if ($degree === '') {
+                return null;
+            }
+
+            return [
+                'degree' => $degree,
+                'institution' => '',
+                'period' => '',
+            ];
+        }, explode(',', (string) ($doctor['degree'] ?? '')))));
+    }
+
+    /**
+     * @param  array<string, mixed>  $doctor
+     * @return list<array{role: string, place: string, period: string}>
+     */
+    private static function experiences(array $doctor): array
+    {
+        if (isset($doctor['experiences']) && is_array($doctor['experiences'])) {
+            return array_values($doctor['experiences']);
+        }
+
+        if (($doctor['clinic'] ?? '') === '' && ($doctor['experience'] ?? '') === '') {
+            return [];
+        }
+
+        return [[
+            'role' => 'Consultant',
+            'place' => (string) ($doctor['clinic'] ?? ''),
+            'period' => (string) ($doctor['experience'] ?? ''),
+        ]];
     }
 }

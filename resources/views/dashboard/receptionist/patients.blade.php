@@ -3,7 +3,7 @@
 @section('title', 'Patients')
 
 @section('content')
-    <x-ui.page-header title="Patients" description="Search for an existing patient or add a new one for {{ $doctorName ?: 'your clinic' }}. Clinical notes stay with the doctor.">
+    <x-ui.page-header title="Patients" description="All patients of {{ $doctorName ?: 'your clinic' }}. Search by name, email, or phone, or add someone new. Clinical notes stay with the doctor.">
         @if ($assigned)
             <a href="{{ route('receptionist.appointments.create', ['mode' => 'new']) }}" class="btn-primary">Add patient</a>
         @endif
@@ -15,6 +15,9 @@
             <label for="desk-patient-search" class="sr-only">Search patients</label>
             <input id="desk-patient-search" type="search" name="q" value="{{ $search }}" placeholder="Name, email, or phone" class="field sm:max-w-md">
             <button class="btn-primary" type="submit">Search</button>
+            @if ($search !== '')
+                <a href="{{ route('receptionist.patients') }}" class="btn-secondary">Clear</a>
+            @endif
         </form>
         <section class="panel">
             <ul class="divide-y divide-line">
@@ -30,7 +33,7 @@
                         <a class="btn-primary h-9 px-3" href="{{ route('receptionist.appointments.create', ['q' => $patient->name, 'patient_id' => $patient->id]) }}">Book</a>
                     </li>
                 @empty
-                    <li class="px-4 py-5 text-sm text-body">{{ $search === '' ? 'Search to find a patient, or add a new one.' : 'No patients match that search. Add them as a new patient.' }}</li>
+                    <li class="px-4 py-5 text-sm text-body">{{ $search === '' ? 'No patients yet. Add a patient when someone new arrives.' : 'No patients match that search.' }}</li>
                 @endforelse
             </ul>
         </section>

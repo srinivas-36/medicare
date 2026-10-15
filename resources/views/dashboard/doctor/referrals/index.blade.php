@@ -23,7 +23,7 @@ $statusClass = [
 </x-ui.page-header>
 
 @if (session('status'))
-<p class="mb-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm font-medium text-success">{{ session('status') }}</p>
+<p class="mb-4 rounded-lg border border-[#BBF7D0] bg-   [#F0FDF4] px-4 py-3 text-sm font-medium text-success">{{ session('status') }}</p>
 @endif
 
 @if ($errors->any())
@@ -32,8 +32,8 @@ $statusClass = [
 
 <div x-data="{ tab: 'incoming' }">
     <div class="mb-4 flex gap-6 border-b border-[#E2E8F0]" role="tablist">
-        <button type="button" role="tab" class="border-b-2 pb-2 text-sm font-semibold" :class="tab === 'incoming' ? 'border-[#0067FF] text-[#0067FF]' : 'border-transparent text-[#64748B]'" @click="tab = 'incoming'">Incoming</button>
-        <button type="button" role="tab" class="border-b-2 pb-2 text-sm font-semibold" :class="tab === 'outgoing' ? 'border-[#0067FF] text-[#0067FF]' : 'border-transparent text-[#64748B]'" @click="tab = 'outgoing'">Outgoing</button>
+        <button type="button" role="tab" class="border-b-2 pb-2 text-sm font-semibold" :class="tab === 'incoming' ? 'border-[#0067FF] text-[#0067FF]' : 'border-transparent text-[#64748B]'" @click="tab = 'incoming'">Received</button>
+        <button type="button" role="tab" class="border-b-2 pb-2 text-sm font-semibold" :class="tab === 'outgoing' ? 'border-[#0067FF] text-[#0067FF]' : 'border-transparent text-[#64748B]'" @click="tab = 'outgoing'">Sent</button>
     </div>
 
     <section class="dash-panel" x-show="tab === 'incoming'">

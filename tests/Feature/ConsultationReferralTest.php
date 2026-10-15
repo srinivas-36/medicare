@@ -215,6 +215,35 @@ class ConsultationReferralTest extends TestCase
 
         Queue::assertNotPushed(GenerateClinicalAnalysis::class);
         Queue::assertNotPushed(GenerateAiAnalysis::class);
+
+        $followUpOn = now()->addDays(10)->toDateString();
+
+        $this->actingAs($doctorUser)
+            ->put(route('doctor.appointments.consult.update', $appointment), [
+                'follow_up_instructions' => 'Check the reading again.',
+                'follow_up_on' => $followUpOn,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consult saved.');
+
+        $consultation = Consultation::query()->where('appointment_id', $appointment->id)->first();
+        $this->assertNotNull($consultation);
+        $this->assertSame('Patient reports a throbbing headache.', $consultation->clinical_notes);
+        $this->assertSame('Tension headache', $consultation->diagnosis);
+        $this->assertSame('Hydration and review.', $consultation->plan);
+        $this->assertSame('Check the reading again.', $consultation->follow_up_instructions);
+        $this->assertSame($followUpOn, $consultation->follow_up_on?->toDateString());
+
+        $this->actingAs($doctorUser)
+            ->put(route('doctor.appointments.consult.update', $appointment), [
+                'clinical_notes' => 'Headache has eased.',
+            ])
+            ->assertRedirect();
+
+        $consultation->refresh();
+        $this->assertSame('Headache has eased.', $consultation->clinical_notes);
+        $this->assertSame('Check the reading again.', $consultation->follow_up_instructions);
+        $this->assertSame($followUpOn, $consultation->follow_up_on?->toDateString());
     }
 
     public function test_analysis_job_stores_a_ready_summary_and_referral_brief(): void
@@ -737,9 +766,10 @@ class ConsultationReferralTest extends TestCase
             ->get(route('doctor.appointments.show', $appointment))
             ->assertOk()
             ->assertSee('Refer to another doctor')
-            ->assertSee('Dr Noah Shah')
+            ->assertSee('Dr Ananya Iyer')
             ->assertSee('Cardiology')
-            ->assertSee('name="to_doctor_id"', false)
+            ->assertDontSee('Dr Noah Shah')
+            ->assertDontSee('name="to_doctor_id"', false)
             ->assertDontSee('Dr Pending Cole')
             ->assertDontSee('Sample specialists');
 
@@ -882,10 +912,19 @@ class ConsultationReferralTest extends TestCase
             ->assertSee('View profile')
             ->assertSee('Dr Ananya Iyer')
             ->assertSee('City Heart Clinic')
+            ->assertSee('images/referral-doctors/ananya-iyer.jpg', false)
+            ->assertSee('Qualifications')
+            ->assertSee('Back to specialists')
             ->assertSee('Matches this visit')
             ->assertSee('Chest pain')
+            ->assertSee('Psychiatry')
+            ->assertSee('Ophthalmology')
             ->assertDontSee('name="to_doctor_id"', false)
             ->assertDontSee('No other approved doctors are available');
+
+        $directory = collect(MockReferralDirectory::doctors());
+        $this->assertCount(10, $directory);
+        $this->assertCount(10, $directory->pluck('specialization')->unique());
     }
 
     public function test_a_sample_referral_is_listed_after_it_is_sent(): void

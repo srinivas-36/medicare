@@ -289,6 +289,8 @@ class PatientController extends Controller
                 ->map(function (Appointment $appointment) {
                     $row = AppointmentPresenter::doctor($appointment);
                     $row['visit'] = AppointmentPresenter::VISIT_LABELS[$appointment->visit_type] ?? 'Visit';
+                    $row['visit_type'] = (string) ($appointment->visit_type ?? '');
+                    $row['on'] = $appointment->appointment_date?->toDateString() ?? '';
                     $row['diagnosis'] = $appointment->consultation?->diagnosis;
                     $row['plan'] = $appointment->consultation?->plan;
                     $clinical = collect([
@@ -311,6 +313,7 @@ class PatientController extends Controller
                         'id' => $report->id,
                         'name' => $report->original_name,
                         'url' => route('doctor.appointments.reports.show', [$appointment, $report]),
+                        'download_url' => route('doctor.appointments.reports.show', [$appointment, $report, 'download' => 1]),
                     ])->values()->all();
                     $row['reports'] = $appointment->reports->count();
                     $row['referrals'] = $appointment->referrals->map(fn ($referral) => [
@@ -339,13 +342,16 @@ class PatientController extends Controller
 
         abort_if(! $linked && ! $hasVisit, 404);
 
-        foreach (['phone', 'age', 'gender', 'blood_type', 'bp', 'diabetic', 'hyperthyroidism'] as $key) {
+        $allowed = ['phone', 'age', 'gender', 'blood_type', 'bp', 'diabetic', 'hyperthyroidism'];
+        $present = array_values(array_filter($allowed, fn (string $key) => $request->exists($key)));
+
+        foreach ($present as $key) {
             if ($request->input($key) === '') {
                 $request->merge([$key => null]);
             }
         }
 
-        $data = $request->validate([
+        $rules = array_intersect_key([
             'phone' => ['nullable', 'string', 'max:30'],
             'age' => ['nullable', 'integer', 'min:0', 'max:120'],
             'gender' => ['nullable', Rule::in(['male', 'female', 'other'])],
@@ -353,17 +359,24 @@ class PatientController extends Controller
             'bp' => ['nullable', 'string', 'max:20'],
             'diabetic' => ['nullable', Rule::in(['yes', 'no'])],
             'hyperthyroidism' => ['nullable', Rule::in(['yes', 'no'])],
-        ]);
+        ], array_flip($present));
 
-        $patient->update([
-            'phone' => $data['phone'] ?? null,
-            'gender' => $data['gender'] ?? null,
-        ]);
+        $data = $rules === [] ? [] : $request->validate($rules);
+
+        $identity = array_intersect_key($data, array_flip(['phone', 'gender']));
+
+        if ($identity !== []) {
+            $patient->update($identity);
+        }
 
         $profile = $patient->patient_profile()->firstOrNew([]);
         $notes = is_array($profile->health_notes) ? $profile->health_notes : [];
 
         foreach (['bp', 'diabetic', 'hyperthyroidism'] as $key) {
+            if (! array_key_exists($key, $data)) {
+                continue;
+            }
+
             $previous = is_array($notes[$key] ?? null) ? $notes[$key] : ['known' => true, 'value' => null];
             $value = $data[$key] ?? null;
             $notes[$key] = filled($value)
@@ -371,15 +384,27 @@ class PatientController extends Controller
                 : ['known' => filter_var($previous['known'] ?? true, FILTER_VALIDATE_BOOLEAN), 'value' => null];
         }
 
-        $profile->age = $data['age'] ?? null;
-        $profile->blood_type = $data['blood_type'] ?? null;
+        if (array_key_exists('age', $data)) {
+            $profile->age = $data['age'];
+        }
+
+        if (array_key_exists('blood_type', $data)) {
+            $profile->blood_type = $data['blood_type'];
+        }
+
         $profile->health_notes = $notes;
         $profile->user()->associate($patient);
         $profile->save();
 
+        $message = 'Patient chart updated.';
+
+        if ($request->input('redirect') === 'visit') {
+            return back()->with('status', $message);
+        }
+
         return redirect()
             ->route('doctor.patients.show', $patient)
-            ->with('status', 'Patient chart updated.');
+            ->with('status', $message);
     }
 
     /**
