@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\AppointmentBooking;
 use App\Support\AppointmentPresenter;
 use App\Support\ClinicSchedule;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -279,8 +280,9 @@ class AppointmentController extends Controller
     {
         $doctor = $this->clinic($request);
         abort_unless($doctor && (int) $appointment->doctor_id === (int) $doctor->id, 403);
-        $appointment->load('patient');
+        $appointment->load(['patient', 'doctor']);
         $bookedOn = $appointment->appointment_date?->toDateString();
+        $closed = in_array($appointment->status, ['cancelled', 'completed'], true);
         $canMove = in_array($appointment->status, ['pending', 'confirmed'], true);
         $openSlots = $canMove
             ? collect($this->booking->calendar($doctor, null, null, $appointment->id))
@@ -293,13 +295,39 @@ class AppointmentController extends Controller
             $bookedLabel .= ' – '.AppointmentPresenter::time($appointment->ending_time);
         }
 
+        $visitLabel = AppointmentPresenter::VISIT_LABELS[$appointment->visit_type]
+            ?? (filled($appointment->visit_type) ? ucfirst((string) $appointment->visit_type) : 'Visit');
+
         return view('dashboard.receptionist.appointments.show', [
             'appointment' => $appointment,
             'openSlots' => $openSlots,
             'bookedDate' => $bookedOn ?? '',
             'bookedLabel' => $bookedLabel,
             'canMove' => $canMove,
+            'closed' => $closed,
+            'department' => filled($appointment->doctor?->specialization) ? $appointment->doctor->specialization : 'Not recorded',
+            'visitLabel' => $visitLabel,
         ]);
+    }
+
+    public function updateNotes(Request $request, Appointment $appointment): JsonResponse|RedirectResponse
+    {
+        $doctor = $this->clinic($request);
+        abort_unless($doctor && (int) $appointment->doctor_id === (int) $doctor->id, 403);
+
+        $data = $request->validate([
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $appointment->forceFill([
+            'notes' => filled($data['notes'] ?? null) ? trim((string) $data['notes']) : null,
+        ])->save();
+
+        if ($request->expectsJson()) {
+            return response()->json(['saved' => true]);
+        }
+
+        return back()->with('status', 'Notes saved.');
     }
 
     public function reschedule(Request $request, Appointment $appointment): RedirectResponse

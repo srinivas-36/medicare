@@ -543,11 +543,15 @@ class ReceptionistDeskTest extends TestCase
         foreach (['checked_in', 'completed', 'cancelled'] as $status) {
             $appointment->forceFill(['status' => $status])->save();
 
-            $this->actingAs($receptionist)
+            $response = $this->actingAs($receptionist)
                 ->get(route('receptionist.appointments.show', $appointment))
                 ->assertOk()
                 ->assertDontSee('Reschedule')
                 ->assertDontSee('data-reschedule', false);
+
+            if (in_array($status, ['completed', 'cancelled'], true)) {
+                $response->assertDontSee('Check-in')->assertDontSee('Check in patient');
+            }
 
             $this->actingAs($receptionist)
                 ->post(route('receptionist.appointments.reschedule', $appointment), [

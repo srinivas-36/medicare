@@ -10,32 +10,35 @@
     data-reschedule
     data-booked-date="{{ $bookedDate }}"
     data-booked-label="{{ $bookedLabel }}"
-    class="mt-3"
+    class="mt-4"
 >
     @csrf
     <input type="hidden" name="slot" data-reschedule-slot value="{{ old('slot') }}">
-    <div class="grid items-start gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+    <p data-reschedule-date class="sr-only">Current booking</p>
+    <div class="grid items-start gap-5 lg:grid-cols-[232px_minmax(0,1fr)]">
         <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">Available dates</p>
-            <p data-reschedule-date class="mt-1 text-sm font-semibold text-[#15803D]">Current booking</p>
-            <div data-reschedule-calendar class="mt-2"></div>
-            <p class="mt-2 flex items-center gap-2 text-xs text-body">
-                <span class="inline-block h-2.5 w-2.5 rounded-full bg-[#16A34A]" aria-hidden="true"></span>
-                Existing booking
+            <div data-reschedule-calendar></div>
+            <p class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-body">
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="inline-block h-2.5 w-2.5 rounded-full bg-[#0067FF]" aria-hidden="true"></span>
+                    Selected date
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="inline-block h-2.5 w-2.5 rounded-full bg-[#16A34A]" aria-hidden="true"></span>
+                    Existing booking
+                </span>
             </p>
         </div>
-        <div class="rounded-xl border border-line bg-page px-3 py-3">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">Available time slots</p>
-            <div data-reschedule-slots class="mt-2 flex flex-wrap gap-2"></div>
+        <div class="min-w-0">
+            <p class="text-sm font-semibold text-heading">Available Time Slots</p>
+            <div data-reschedule-slots class="mt-2 flex max-h-72 flex-col gap-2 overflow-y-auto"></div>
             <p data-reschedule-note class="mt-2 text-sm text-body">Choose a day after the booked date.</p>
-            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-                <label class="block min-w-0 flex-1 text-sm font-medium text-heading">Reason
-                    <input name="reason" value="{{ old('reason') }}" class="field mt-1.5" maxlength="255" placeholder="Optional note">
-                </label>
-                <button type="submit" class="btn-primary shrink-0">Reschedule</button>
-            </div>
         </div>
     </div>
+    <button type="submit" class="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#0067FF] text-sm font-semibold text-white hover:bg-[#0056D6]">
+        <x-ui.icon name="calendar" class="h-4 w-4" />
+        Reschedule appointment
+    </button>
 </form>
 <script type="application/json" id="reschedule-open-slots">@json($openSlots)</script>
 
@@ -105,36 +108,67 @@
                     const available = !isBooked && dates.includes(value);
                     const selected = available && selectedDate === value;
                     const classes = [
-                        'h-8 rounded-md text-xs font-semibold',
+                        'mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold',
                         isBooked
                             ? 'bg-[#16A34A] text-white'
                             : (selected
                                 ? 'bg-[#0067FF] text-white'
-                                : (available ? 'bg-[#E8F2FF] text-[#0067FF] hover:ring-1 hover:ring-[#0067FF]' : 'cursor-not-allowed text-[#CBD5E1] line-through')),
+                                : (available ? 'text-[#181A1E] hover:bg-[#E8F2FF]' : 'cursor-not-allowed text-[#CBD5E1]')),
                     ].join(' ');
                     const title = isBooked ? ' title="Existing booking"' : '';
                     cells.push(`<button type="button" class="${classes}" data-day="${value}" data-booked="${isBooked ? '1' : '0'}" ${available || isBooked ? '' : 'disabled'}${title}>${day}</button>`);
                 }
 
                 calendar.innerHTML = `
-                    <div class="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-2">
+                    <div>
                         <div class="mb-2 flex items-center justify-between">
-                            <button type="button" data-month="-1" class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#181A1E] hover:bg-white" aria-label="Previous month">‹</button>
-                            <p class="text-xs font-semibold text-[#181A1E]">${label}</p>
-                            <button type="button" data-month="1" class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#181A1E] hover:bg-white" aria-label="Next month">›</button>
+                            <button type="button" data-month="-1" class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#64748B] hover:bg-[#F8FAFC]" aria-label="Previous month">‹</button>
+                            <p class="text-sm font-semibold text-[#181A1E]">${label}</p>
+                            <button type="button" data-month="1" class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#64748B] hover:bg-[#F8FAFC]" aria-label="Next month">›</button>
                         </div>
-                        <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-[#94A3B8]">
-                            <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                        <div class="grid grid-cols-7 text-center text-[10px] font-semibold text-[#94A3B8]">
+                            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                         </div>
-                        <div class="mt-1 grid grid-cols-7 gap-1">${cells.join('')}</div>
+                        <div class="mt-1 grid grid-cols-7 gap-y-1">${cells.join('')}</div>
                     </div>
                 `;
             };
 
+            const slotCard = (label, caption, tone, disabled) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.disabled = disabled;
+                const tones = {
+                    current: 'border-[#BFDBFE] bg-[#EFF6FF]',
+                    available: 'border-[#BBF7D0] bg-white hover:border-[#16A34A]',
+                    selected: 'border-[#0067FF] bg-[#0067FF]',
+                };
+                const captions = {
+                    current: 'text-[#0067FF]',
+                    available: 'text-[#16A34A]',
+                    selected: 'text-white/90',
+                };
+                const titles = {
+                    current: 'text-[#181A1E]',
+                    available: 'text-[#181A1E]',
+                    selected: 'text-white',
+                };
+                button.className = `flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left ${tones[tone]} ${disabled ? 'cursor-default' : ''}`;
+                const time = document.createElement('span');
+                time.className = `whitespace-nowrap text-sm font-semibold ${titles[tone]}`;
+                time.textContent = label;
+                const detail = document.createElement('span');
+                detail.className = `shrink-0 text-xs font-semibold ${captions[tone]}`;
+                detail.textContent = caption;
+                button.append(time, detail);
+                return button;
+            };
+
             const paintCurrentBooking = () => {
                 slotList.innerHTML = '';
-                pickedDate.textContent = formatDate(bookedDate);
-                pickedDate.className = 'mt-1 text-sm font-semibold text-[#15803D]';
+                if (pickedDate) {
+                    pickedDate.textContent = formatDate(bookedDate);
+                }
                 slotInput.value = '';
                 selectedStart = '';
 
@@ -143,12 +177,7 @@
                     return;
                 }
 
-                const current = document.createElement('button');
-                current.type = 'button';
-                current.disabled = true;
-                current.textContent = bookedLabel;
-                current.className = 'inline-flex items-center rounded-lg border border-[#16A34A] bg-[#16A34A] px-3 py-1.5 text-sm font-semibold text-white';
-                slotList.appendChild(current);
+                slotList.appendChild(slotCard(bookedLabel, 'Current booking', 'current', true));
                 note.textContent = 'This is the current booking. Choose a later day to reschedule.';
             };
 
@@ -161,19 +190,20 @@
                     return;
                 }
 
-                pickedDate.textContent = formatDate(selectedDate);
-                pickedDate.className = 'mt-1 text-sm font-semibold text-primary';
+                if (pickedDate) {
+                    pickedDate.textContent = formatDate(selectedDate);
+                }
                 note.textContent = `${times.length} open ${times.length === 1 ? 'time' : 'times'} on this day.`;
                 let matched = false;
                 times.forEach((slot) => {
                     const active = selectedStart === slot.start;
                     if (active) matched = true;
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.textContent = `${formatTime(slot.start)} – ${formatTime(slot.end)}`;
-                    button.className = active
-                        ? 'inline-flex items-center rounded-lg border border-[#0067FF] bg-[#0067FF] px-3 py-1.5 text-sm font-semibold text-white'
-                        : 'inline-flex items-center rounded-lg border border-[#E2E8F0] bg-white px-3 py-1.5 text-sm font-semibold text-[#181A1E] hover:border-[#0067FF]';
+                    const button = slotCard(
+                        `${formatTime(slot.start)} – ${formatTime(slot.end)}`,
+                        active ? 'Selected' : 'Available',
+                        active ? 'selected' : 'available',
+                        false,
+                    );
                     button.addEventListener('click', () => {
                         selectedStart = slot.start;
                         slotInput.value = `${selectedDate}|${slot.start}`;

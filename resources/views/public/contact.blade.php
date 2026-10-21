@@ -4,19 +4,19 @@
 @section('description', 'Send Medicare a message about a booking, your account, or a question. We reply by email.')
 
 @section('content')
-    <section class="px-5 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
-        <div class="surface mx-auto grid w-full max-w-6xl overflow-hidden shadow-lift lg:grid-cols-2">
+    <section class="overflow-x-clip px-5 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
+        <div class="surface mx-auto grid w-full max-w-6xl grid-cols-1 overflow-hidden shadow-lift lg:grid-cols-2">
             <div class="relative min-h-[280px] min-w-0 sm:min-h-[340px] lg:min-h-full">
                 <img
                     src="{{ asset('images/login.png') }}"
                     alt="A doctor sitting with a patient"
                     class="absolute inset-0 h-full w-full object-cover object-[center_28%]"
                 >
-                <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(14,28,51,0.08)_0%,rgba(14,28,51,0.02)_38%,rgba(14,28,51,0.55)_72%,rgba(14,28,51,0.88)_100%)]"></div>
+                <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(14,28,51,0.08)_0%,rgba(14,28,51,0)_42%,rgba(14,28,51,0.78)_74%,rgba(14,28,51,0.94)_100%)]"></div>
                 <div class="relative flex h-full w-full min-w-0 flex-col justify-end p-6 text-white sm:p-8 lg:p-10">
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Support</p>
-                    <h1 class="mt-2 max-w-xs text-3xl font-extrabold tracking-tight sm:text-4xl">We're here to help</h1>
-                    <p class="mt-3 max-w-sm text-sm leading-6 text-white/85 sm:text-[15px]">
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Support</p>
+                    <h1 class="mt-2 max-w-[12rem] text-3xl font-extrabold leading-tight tracking-tight sm:max-w-none sm:text-4xl">We're here to help</h1>
+                    <p class="mt-3 w-0 min-w-full text-sm leading-6 text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.35)]">
                         Questions about a booking, your account, or a fee. Write to us and we reply by email.
                     </p>
                 </div>

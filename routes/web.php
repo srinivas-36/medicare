@@ -190,6 +190,7 @@ Route::middleware(['auth', 'role:receptionist'])
         Route::get('/appointments/{appointment}', [ReceptionistAppointmentController::class, 'show'])->name('appointments.show');
         Route::post('/appointments/{appointment}/status', [ReceptionistAppointmentController::class, 'updateStatus'])->name('appointments.update-status');
         Route::post('/appointments/{appointment}/reschedule', [ReceptionistAppointmentController::class, 'reschedule'])->name('appointments.reschedule');
+        Route::post('/appointments/{appointment}/notes', [ReceptionistAppointmentController::class, 'updateNotes'])->name('appointments.notes');
         Route::get('/patients/search', [ReceptionistPatientController::class, 'search'])->name('patients.search');
         Route::get('/patients', [ReceptionistPatientController::class, 'index'])->name('patients');
         Route::get('/profile', [AccountProfileController::class, 'showReceptionist'])->name('profile');
